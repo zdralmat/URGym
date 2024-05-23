@@ -1,6 +1,5 @@
-# Gym-Styled UR5 arm with Robotiq-85 / 140 gripper in PyBullet simulator
-
-*Probably the best one among all GitHub repos.*
+# Gymnasium enabled UR5 arm with Robotiq-85 / 140 gripper in PyBullet simulator
+Forked from [ElectronicElephant/pybullet_ur5_robotiq](https://github.com/ElectronicElephant/pybullet_ur5_robotiq)
 
 This repo is under active development. Issues / PRs are welcomed.
 
@@ -15,7 +14,7 @@ This repo is under active development. Issues / PRs are welcomed.
 - A heuristic grasping demo
 - An interactive user-control demo
 
-## Prerequisite
+## Prerequisites
 - Python 3
 - PyBullet
 
@@ -23,18 +22,12 @@ This repo is under active development. Issues / PRs are welcomed.
 
 You can try this repo with the interactive user-control demo.
 ```[Python]
-python main.py
+python train.py
 ```
 
-You can change the XYZ and RPY of the gripper on the right panel.
-
-Press `Z` to close the gripper and `R` to open it.
-
-## Usage
-
-See `heuristic demo` in `main.py`.
-
 ###  References
+https://github.com/ElectronicElephant/pybullet_ur5_robotiq
+
 https://github.com/matafela/pybullet_grasp_annotator_robotiq_85
 
 https://github.com/zswang666/pybullet-playground
