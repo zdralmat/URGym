@@ -40,7 +40,6 @@ class RobotBase(object):
         self.__init_robot__()
         self.__parse_joint_info__()
         self.__post_load__()
-        print(self.joints)
 
     def step_simulation(self):
         raise RuntimeError('`step_simulation` method of RobotBase Class should be hooked by the environment.')

@@ -20,10 +20,10 @@ class FailToReachTargetError(RuntimeError):
     pass
 
 
-class ClutteredPushGrasp(Env):
+class BoxManipulation(Env):
 
     SIMULATION_STEP_DELAY = 1 / 240.
-    MAX_EPISODE_STEPS = 20
+    MAX_EPISODE_STEPS = 50
 
     def __init__(self, camera=None, vis=False) -> None:
         self.vis = vis
@@ -46,15 +46,18 @@ class ClutteredPushGrasp(Env):
         # robot = Panda((0, 0.5, 0), (0, 0, math.pi))
         self.robot = UR5Robotiq85((0, 0.5, 0), (0, 0, 0))
 
-        # define environment
+        # define environment        
         self.physicsClient = p.connect(p.GUI if self.vis else p.DIRECT)
         p.setAdditionalSearchPath(pybullet_data.getDataPath())
         p.setGravity(0, 0, -10)
+        # Hide right and left menus
+        p.configureDebugVisualizer(p.COV_ENABLE_GUI,0)
+        # Reorient the debug camera
+        p.resetDebugVisualizerCamera(cameraDistance=2, cameraYaw=50, cameraPitch=-25, cameraTargetPosition=[-0.5,+0.5,0])
         self.planeID = p.loadURDF("plane.urdf")
 
         self.robot.load()
         self.robot.step_simulation = self.step_simulation
-        print(self.robot.get_joint_obs())
 
         # custom sliders to tune parameters (name of the parameter,range,initial value)
         self.xin = p.addUserDebugParameter("x", -0.224, 0.224, 0)
@@ -76,6 +79,7 @@ class ClutteredPushGrasp(Env):
         self.box_opened = False
         self.button_pressed = False
         self.box_closed = False
+
 
     def step_simulation(self):
         """
@@ -113,9 +117,11 @@ class ClutteredPushGrasp(Env):
         reward = self.update_reward()
         terminated = self.box_closed
         self.episode_steps += 1
-        truncated = (self.episode_steps > self.MAX_EPISODE_STEPS)
+        truncated = (self.episode_steps >= self.MAX_EPISODE_STEPS)
         #info = dict(box_opened=self.box_opened, button_pressed=self.button_pressed, box_closed=self.box_closed)
         info = dict(is_success=self.box_closed)
+
+        reward -= 0.1 # Step penalty
         return self.get_observation()["ee_pos"], reward, terminated, truncated, info
 
     def update_reward(self):
@@ -150,12 +156,13 @@ class ClutteredPushGrasp(Env):
         return obs
 
     def reset_box(self):
-        p.setJointMotorControl2(self.boxID, 0, p.POSITION_CONTROL, targetPosition=1, force=10)
-        p.setJointMotorControl2(self.boxID, 1, p.VELOCITY_CONTROL, force=10)
+        p.resetJointState(self.boxID, 0, targetValue=0)
+        p.resetJointState(self.boxID, 1, targetValue=0)
+        p.setJointMotorControl2(self.boxID, 0, p.POSITION_CONTROL, force=1)
+        p.setJointMotorControl2(self.boxID, 1, p.VELOCITY_CONTROL, force=0)
         self.box_opened = self.box_closed = self.button_pressed = False
 
     def reset(self, seed: Optional[int] = None,):
-        print("New episode...")
         super().reset(seed=seed)
         self.robot.reset()
         self.reset_box()

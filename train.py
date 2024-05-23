@@ -16,8 +16,6 @@ __author__ = "Inaki Vazquez"
 __email__ = "ivazquez@deusto.es"
 __license__ = "GPLv3"
 
-import gymnasium as gym
-from gymnasium.wrappers.record_video import RecordVideo
 import argparse
 import sys
 
@@ -25,7 +23,7 @@ from stable_baselines3 import PPO, DQN, SAC, A2C, DDPG, TD3
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.monitor import Monitor
 
-from ur5.env import ClutteredPushGrasp
+from ur5.env_box import BoxManipulation
 
 parser = argparse.ArgumentParser(description='Train an environment with an SB3 algorithm and then render 10 episodes.')
 parser.add_argument('-a', '--algo', type=str, default='PPO',
@@ -43,7 +41,7 @@ recvideo = args.recvideo
 tblog_dir = None if args.tblog==False else "./logs"
 
 # Create environment
-env = ClutteredPushGrasp(vis=True)
+env = BoxManipulation(vis=False)
 
 print(f"Training for {n_steps} steps with {str_algo}...")
 
@@ -53,7 +51,11 @@ model = algo('MlpPolicy', env=env, tensorboard_log=tblog_dir, verbose=True)
 # Train the agent and display a progress bar
 model.learn(total_timesteps=int(n_steps), progress_bar=True)
 
+env.close()
+
+env = BoxManipulation(vis=True)
 env = Monitor(env)
+model.set_env(env)
 
 # Evaluate the agent
 n_episodes = 10
