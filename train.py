@@ -23,9 +23,12 @@ from stable_baselines3 import PPO, DQN, SAC, A2C, DDPG, TD3
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.monitor import Monitor
 
-from ur5.env_box import BoxManipulation
+from ur5.envs.env_box import BoxManipulation
+from ur5.envs.env_cubes import CubesManipulation
+import gymnasium as gym
 
 parser = argparse.ArgumentParser(description='Train an environment with an SB3 algorithm and then render 10 episodes.')
+parser.add_argument('-e', '--env', type=str, default="CartPole-v1", help='environment to test (e.g. CartPole-v1)')
 parser.add_argument('-a', '--algo', type=str, default='PPO',
 					help='algorithm to test from SB3, such as PPO (default), SAC, DQN... using default hyperparameters')
 parser.add_argument('-n', '--nsteps', type=int, default=100_000, help='number of steps to train')
@@ -34,6 +37,7 @@ parser.add_argument('-t', '--tblog', action="store_true", help='generate tensorb
 
 args = parser.parse_args()
 
+str_env = args.env
 str_algo = args.algo.upper()
 algo = getattr(sys.modules[__name__], str_algo) # Obtains the classname based on the string
 n_steps = args.nsteps
@@ -41,7 +45,7 @@ recvideo = args.recvideo
 tblog_dir = None if args.tblog==False else "./logs"
 
 # Create environment
-env = BoxManipulation(vis=False)
+env = gym.make(str_env, render_mode='human')
 
 print(f"Training for {n_steps} steps with {str_algo}...")
 
@@ -53,7 +57,7 @@ model.learn(total_timesteps=int(n_steps), progress_bar=True)
 
 env.close()
 
-env = BoxManipulation(vis=True)
+env = gym.make(str_env, render_mode='human')
 env = Monitor(env)
 model.set_env(env)
 
