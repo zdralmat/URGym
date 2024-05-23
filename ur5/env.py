@@ -5,27 +5,46 @@ import random
 import numpy as np
 import pybullet as p
 import pybullet_data
+import os
 
-from utilities import Models, Camera
-from collections import namedtuple
-from attrdict import AttrDict
-from tqdm import tqdm
+from ur5.utilities import YCBModels, Models, Camera
+from ur5.robot import Panda, UR5Robotiq85, UR5Robotiq140
+
+
+from gymnasium import Env
+from gymnasium.spaces import Box
+from typing import Optional
 
 
 class FailToReachTargetError(RuntimeError):
     pass
 
 
-class ClutteredPushGrasp:
+class ClutteredPushGrasp(Env):
 
     SIMULATION_STEP_DELAY = 1 / 240.
+    MAX_EPISODE_STEPS = 20
 
-    def __init__(self, robot, models: Models, camera=None, vis=False) -> None:
-        self.robot = robot
+    def __init__(self, camera=None, vis=False) -> None:
         self.vis = vis
-        if self.vis:
-            self.p_bar = tqdm(ncols=0, disable=False)
+
+        # Set observation and action spaces
+        # Observations: just ee coordinate s(x,y,z)
+        self.observation_space = Box(low=np.array([-1.0, -1.0, -1.0]), high=np.array([1.0, 1.0, 1.0]), dtype=np.float32)
+        # Actions: (x, y, z, roll, pitch, yaw, gripper_opening_length [0, 0.085]) for End Effector Position Control
+        self.action_space = Box(low=np.array([-1.0, -1.0, -1.0, -math.pi, -math.pi, -math.pi, 0.0]), high=np.array([+1.0, +1.0, +1.0, +math.pi, +math.pi, +math.pi, 0.085]), dtype=np.float32)
+
+        current_dir = os.path.dirname(__file__)
+        ycb_models = YCBModels(
+            os.path.join(current_dir, './data/ycb', '**', 'textured-decmp.obj'),
+        )
+        """camera = Camera((1, 1, 1),
+                        (0, 0, 0),
+                        (0, 0, 1),
+                        0.1, 5, (320, 320), 40)"""
         self.camera = camera
+        # robot = Panda((0, 0.5, 0), (0, 0, math.pi))
+        self.robot = UR5Robotiq85((0, 0.5, 0), (0, 0, 0))
 
         # define environment
         self.physicsClient = p.connect(p.GUI if self.vis else p.DIRECT)
@@ -35,6 +54,7 @@ class ClutteredPushGrasp:
 
         self.robot.load()
         self.robot.step_simulation = self.step_simulation
+        print(self.robot.get_joint_obs())
 
         # custom sliders to tune parameters (name of the parameter,range,initial value)
         self.xin = p.addUserDebugParameter("x", -0.224, 0.224, 0)
@@ -45,7 +65,7 @@ class ClutteredPushGrasp:
         self.yawId = p.addUserDebugParameter("yaw", -np.pi/2, np.pi/2, np.pi/2)
         self.gripper_opening_length_control = p.addUserDebugParameter("gripper_opening_length", 0, 0.085, 0.04)
 
-        self.boxID = p.loadURDF("./urdf/skew-box-button.urdf",
+        self.boxID = p.loadURDF(os.path.join(current_dir, "./urdf/skew-box-button.urdf"),
                                 [0.0, 0.0, 0.0],
                                 # p.getQuaternionFromEuler([0, 1.5706453, 0]),
                                 p.getQuaternionFromEuler([0, 0, 0]),
@@ -54,7 +74,7 @@ class ClutteredPushGrasp:
 
         # For calculating the reward
         self.box_opened = False
-        self.btn_pressed = False
+        self.button_pressed = False
         self.box_closed = False
 
     def step_simulation(self):
@@ -64,7 +84,6 @@ class ClutteredPushGrasp:
         p.stepSimulation()
         if self.vis:
             time.sleep(self.SIMULATION_STEP_DELAY)
-            self.p_bar.update(1)
 
     def read_debug_parameter(self):
         # read the value of task parameter
@@ -78,7 +97,7 @@ class ClutteredPushGrasp:
 
         return x, y, z, roll, pitch, yaw, gripper_opening_length
 
-    def step(self, action, control_method='joint'):
+    def step(self, action, control_method='end'):
         """
         action: (x, y, z, roll, pitch, yaw, gripper_opening_length) for End Effector Position Control
                 (a1, a2, a3, a4, a5, a6, a7, gripper_opening_length) for Joint Position Control
@@ -92,9 +111,12 @@ class ClutteredPushGrasp:
             self.step_simulation()
 
         reward = self.update_reward()
-        done = True if reward == 1 else False
-        info = dict(box_opened=self.box_opened, btn_pressed=self.btn_pressed, box_closed=self.box_closed)
-        return self.get_observation(), reward, done, info
+        terminated = self.box_closed
+        self.episode_steps += 1
+        truncated = (self.episode_steps > self.MAX_EPISODE_STEPS)
+        #info = dict(box_opened=self.box_opened, button_pressed=self.button_pressed, box_closed=self.box_closed)
+        info = dict(is_success=self.box_closed)
+        return self.get_observation()["ee_pos"], reward, terminated, truncated, info
 
     def update_reward(self):
         reward = 0
@@ -102,12 +124,15 @@ class ClutteredPushGrasp:
             if p.getJointState(self.boxID, 1)[0] > 1.9:
                 self.box_opened = True
                 print('Box opened!')
-        elif not self.btn_pressed:
+                reward = 1
+        elif not self.button_pressed:
             if p.getJointState(self.boxID, 0)[0] < - 0.02:
-                self.btn_pressed = True
-                print('Btn pressed!')
+                self.button_pressed = True
+                print('Button pressed!')
+                reward = 1
         else:
-            if p.getJointState(self.boxID, 1)[0] < 0.1:
+            # If it was opened previously and now closed
+            if self.box_opened and p.getJointState(self.boxID, 1)[0] < 0.1:
                 print('Box closed!')
                 self.box_closed = True
                 reward = 1
@@ -125,13 +150,17 @@ class ClutteredPushGrasp:
         return obs
 
     def reset_box(self):
-        p.setJointMotorControl2(self.boxID, 0, p.POSITION_CONTROL, force=1)
-        p.setJointMotorControl2(self.boxID, 1, p.VELOCITY_CONTROL, force=0)
+        p.setJointMotorControl2(self.boxID, 0, p.POSITION_CONTROL, targetPosition=1, force=10)
+        p.setJointMotorControl2(self.boxID, 1, p.VELOCITY_CONTROL, force=10)
+        self.box_opened = self.box_closed = self.button_pressed = False
 
-    def reset(self):
+    def reset(self, seed: Optional[int] = None,):
+        print("New episode...")
+        super().reset(seed=seed)
         self.robot.reset()
         self.reset_box()
-        return self.get_observation()
+        self.episode_steps = 0
+        return self.get_observation()["ee_pos"], {}
 
     def close(self):
         p.disconnect(self.physicsClient)
