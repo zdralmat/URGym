@@ -128,10 +128,12 @@ class BoxManipulation(Env):
                 print('Box opened!')
                 reward = 1
         elif not self.button_pressed:
-            if p.getJointState(self.boxID, 0)[0] < - 0.02:
-                self.button_pressed = True
-                print('Button pressed!')
-                reward = 1
+            # Check if the button is down
+            if p.getJointState(self.boxID, 0)[0] < -0.02:
+                if self.fingers_on_button():
+                    self.button_pressed = True
+                    print('Button pressed!')
+                    reward = 1
         else:
             # If it was opened previously and now closed
             if self.box_opened and p.getJointState(self.boxID, 1)[0] < 0.1:
@@ -168,6 +170,37 @@ class BoxManipulation(Env):
     def close(self):
         p.disconnect(self.physicsClient)
 
+    def fingers_on_button(self):
+        button_index = 0
+        fingers_indices = list(range(9,19))
+        contact_points = p.getContactPoints()
+        # Filter contact points to find those involving the specific link of the box and the set of fingers links of the robot
+        contact_with_links = [
+            point for point in contact_points 
+            if (point[1] == self.boxID and point[3] == button_index and point[2] == self.robot.id and point[4] in fingers_indices) or
+            (point[2] == self.boxID and point[4] == button_index and point[1] == self.robot.id and point[3] in fingers_indices)
+        ]
+
+        if contact_with_links:
+            print("Button touched")
+            return True
+        else:
+            return False
+
+    def print_bodies(self):
+        id = self.boxID
+        num_joints = p.getNumJoints(id)
+        print("Number of links (parts) in the body:", num_joints)
+
+        # Print base link information (base link has index -1)
+        base_link_name = p.getBodyInfo(id)[0].decode('utf-8')
+        print(f"Link ID -1: {base_link_name}")
+
+        # Print information about each joint/link
+        for i in range(num_joints):
+            joint_info = p.getJointInfo(id, i)
+            link_name = joint_info[12].decode('utf-8')
+            print(f"Link ID {i}: {link_name}")
 
 # Register the environment
 register(
