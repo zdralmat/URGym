@@ -35,6 +35,7 @@ parser.add_argument('-n', '--nsteps', type=int, default=100_000, help='number of
 parser.add_argument('-r', '--recvideo', action="store_true", help='record and store video in a \"video\" directory, instead of using the screen')
 parser.add_argument('-t', '--tblog', action="store_true", help='generate tensorboard logs in the \"logs\" directory')
 parser.add_argument('-s', '--save', action="store_true", help='save policy as policies/policy.zip')
+parser.add_argument('-p', '--evaluate', type=str, nargs='?', const='policies/policy.zip', default=None, help='load the policy passed as parameter (if no passed: policies/policy.zip) and executes -n episodes with it')
 
 args = parser.parse_args()
 
@@ -45,45 +46,48 @@ n_steps = args.nsteps
 recvideo = args.recvideo
 tblog_dir = None if args.tblog==False else "./logs"
 save_policy = args.save
+evaluate_policy = args.evaluate 
 
-# Create environment
-env = gym.make(str_env, render_mode='human')
+if evaluate_policy is None:
+	# Create environment
+	env = gym.make(str_env, render_mode='human')
 
-print(f"Training for {n_steps} steps with {str_algo}...")
+	print(f"Training for {n_steps} steps with {str_algo}...")
 
-# Instantiate the agent
-model = algo('MlpPolicy', env=env, tensorboard_log=tblog_dir, verbose=True)    
+	# Instantiate the agent
+	model = algo('MlpPolicy', env=env, tensorboard_log=tblog_dir, verbose=True)    
 
-# Train the agent and display a progress bar
-model.learn(total_timesteps=int(n_steps), progress_bar=True)
+	# Train the agent and display a progress bar
+	model.learn(total_timesteps=int(n_steps), progress_bar=True)
 
-if save_policy:
-	model.save("policies/policy.zip")
+	if save_policy:
+		model.save("policies/policy.zip")
+
+	env.close()
+else:
+	env = gym.make(str_env, render_mode='human')
+	env = Monitor(env)
+	model = algo.load(evaluate_policy, env)
+
+	# Evaluate the agent
+	n_episodes = n_steps
+	total_reward = 0
+	print(f"Evaluating for {n_episodes} episodes...")
+
+	for i in range(n_episodes): # episodes
+		print(f"Executing episode {i}... ", end="", flush=True)
+		observation,_ = env.reset()
+		episode_reward = 0
+		while True:
+			action, _states = model.predict(observation, deterministic=True)
+			observation, reward, terminated, truncated, info = env.step(action)
+			episode_reward += reward
+			if terminated or truncated:
+				print(f"reward: {episode_reward:.2f}")
+				total_reward += episode_reward
+				observation,_ = env.reset()
+				break
+	print(f"Mean reward: {total_reward/n_episodes:.2f}")
 
 env.close()
 
-env = gym.make(str_env, render_mode='human')
-env = Monitor(env)
-model.set_env(env)
-
-# Evaluate the agent
-n_episodes = 10
-total_reward = 0
-print(f"Evaluating for {n_episodes} episodes...")
-
-for i in range(n_episodes): # episodes
-	print(f"Executing episode {i}... ", end="", flush=True)
-	observation,_ = env.reset()
-	episode_reward = 0
-	while True:
-		action, _states = model.predict(observation, deterministic=True)
-		observation, reward, terminated, truncated, info = env.step(action)
-		episode_reward += reward
-		if terminated or truncated:
-			print(f"reward: {episode_reward:.2f}")
-			total_reward += episode_reward
-			observation,_ = env.reset()
-			break
-env.close()
-
-print(f"Mean reward: {total_reward/n_episodes:.2f}")
