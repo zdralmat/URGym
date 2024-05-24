@@ -34,6 +34,7 @@ parser.add_argument('-a', '--algo', type=str, default='PPO',
 parser.add_argument('-n', '--nsteps', type=int, default=100_000, help='number of steps to train')
 parser.add_argument('-r', '--recvideo', action="store_true", help='record and store video in a \"video\" directory, instead of using the screen')
 parser.add_argument('-t', '--tblog', action="store_true", help='generate tensorboard logs in the \"logs\" directory')
+parser.add_argument('-s', '--save', action="store_true", help='save policy as policies/policy.zip')
 
 args = parser.parse_args()
 
@@ -43,6 +44,7 @@ algo = getattr(sys.modules[__name__], str_algo) # Obtains the classname based on
 n_steps = args.nsteps
 recvideo = args.recvideo
 tblog_dir = None if args.tblog==False else "./logs"
+save_policy = args.save
 
 # Create environment
 env = gym.make(str_env, render_mode='human')
@@ -54,6 +56,9 @@ model = algo('MlpPolicy', env=env, tensorboard_log=tblog_dir, verbose=True)
 
 # Train the agent and display a progress bar
 model.learn(total_timesteps=int(n_steps), progress_bar=True)
+
+if save_policy:
+	model.save("policies/policy.zip")
 
 env.close()
 
