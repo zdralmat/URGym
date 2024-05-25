@@ -22,6 +22,7 @@ import sys
 from stable_baselines3 import PPO, DQN, SAC, A2C, DDPG, TD3
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.monitor import Monitor
+from stable_baselines3.common.callbacks import CheckpointCallback
 
 from ur5.envs.env_box import BoxManipulation
 from ur5.envs.env_cubes import CubesManipulation
@@ -48,9 +49,9 @@ tblog_dir = None if args.tblog==False else "./logs"
 save_policy = args.save
 evaluate_policy = args.evaluate 
 
-if evaluate_policy is None:
+if not evaluate_policy:
 	# Create environment
-	env = gym.make(str_env, render_mode='human')
+	env = gym.make(str_env, render_mode=None)
 
 	print(f"Training for {n_steps} steps with {str_algo}...")
 
@@ -58,7 +59,8 @@ if evaluate_policy is None:
 	model = algo('MlpPolicy', env=env, tensorboard_log=tblog_dir, verbose=True)    
 
 	# Train the agent and display a progress bar
-	model.learn(total_timesteps=int(n_steps), progress_bar=True)
+	checkpoint_callback = CheckpointCallback(save_freq=50_000, save_path='./checkpoints/')
+	model.learn(total_timesteps=int(n_steps), callback=checkpoint_callback, progress_bar=True)
 
 	if save_policy:
 		model.save("policies/policy.zip")

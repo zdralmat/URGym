@@ -1,8 +1,9 @@
 # Tensorboard log files
 logs/
 
-# Policy files
+# Policy and checkpoint files resulting from training processes
 policies/
+checkpoints/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
