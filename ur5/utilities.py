@@ -129,3 +129,46 @@ def print_links(body_id):
         joint_info = p.getJointInfo(body_id, i)
         link_name = joint_info[12].decode('utf-8')
         print(f"Link ID {i}: {link_name}")
+
+def rotate_quaternion(quaternion, angle, axis):
+    """
+    Rotates a quaternion by a given angle around a given axis.
+
+    Parameters:
+    - quaternion: The quaternion to rotate
+    - angle: The angle to rotate
+    - axis: The axis to rotate around
+
+    Returns:
+    The rotated quaternion
+    """
+    # Create a quaternion from the axis and angle
+    rot_quaternion = p.getQuaternionFromAxisAngle(axis, angle)
+    # Multiply the original quaternion by the rotation quaternion
+    return quaternion_multiply(quaternion, rot_quaternion)
+
+def quaternion_multiply(quat1, quat2):
+    """
+    Multiplies two quaternions.
+
+    Parameters:
+    - quat1: The first quaternion
+    - quat2: The second quaternion
+
+    Returns:
+    The result of the multiplication
+    """
+
+    # Get the real and imaginary parts of the quaternions
+    w1, x1, y1, z1 = quat1
+    w2, x2, y2, z2 = quat2
+
+    # Calculate the real part of the result
+    w = w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2
+    # Calculate the imaginary parts of the result
+    x = w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2
+    y = w1 * y2 + y1 * w2 + z1 * x2 - x1 * z2
+    z = w1 * z2 + z1 * w2 + x1 * y2 - y1 * x2
+
+    return w, x, y, z
+    

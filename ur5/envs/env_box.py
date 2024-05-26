@@ -16,7 +16,6 @@ from ur5.robot import Panda, UR5Robotiq85, UR5Robotiq140
 class BoxManipulation(Env):
 
     SIMULATION_STEP_DELAY = 1 / 240.
-    MAX_EPISODE_STEPS = 200
 
     def __init__(self, button_touch_mode:str='any', camera=None, render_mode='human') -> None:
             """
@@ -40,8 +39,8 @@ class BoxManipulation(Env):
             # Set observation and action spaces
             # Observations: end-effector pose (x,y,z, qx, qy, qz, qw)
             self.observation_space = Box(low=np.array([-1.0, -1.0, -1.0, -math.pi, -math.pi, -math.pi, -math.pi]), high=np.array([1.0, 1.0, 1.0, math.pi, math.pi, math.pi, math.pi]), dtype=np.float64)
-            # Actions: (x, y, z, roll, pitch, yaw, gripper_opening_length [0, 0.085]) for End Effector Position Control
-            self.action_space = Box(low=np.array([-0.1]*3 + [-math.pi/10]*4 + [0.0]), high=np.array([+0.1]*3 + [+math.pi/10]*4 + [0.085]), dtype=np.float32)
+            # Actions: (x, y, z, qx, qy, qz, qw, gripper_opening_length [0, 0.085]) for End Effector Position Control
+            self.action_space = Box(low=np.array([-0.05]*3 + [-math.pi/10]*4 + [0.0]), high=np.array([+0.05]*3 + [+math.pi/10]*4 + [0.085]), dtype=np.float32)
 
             current_dir = os.path.dirname(__file__)
             ycb_models = YCBModels(
@@ -67,6 +66,7 @@ class BoxManipulation(Env):
 
             self.robot.load()
             self.robot.step_simulation = self.step_simulation
+            self.control_method = 'end'
 
             # custom sliders to tune parameters (name of the parameter,range,initial value)
             self.xin = p.addUserDebugParameter("x", -1, 1, 0)
@@ -110,16 +110,15 @@ class BoxManipulation(Env):
 
         return x, y, z, roll, pitch, yaw, gripper_opening_length
 
-    def step(self, action, control_method='end') -> tuple[list, float, bool, bool, dict]:
+    def step(self, action) -> tuple[list, float, bool, bool, dict]:
         """
         action: (x, y, z, roll, pitch, yaw, gripper_opening_length) for End Effector Position Control
                 (a1, a2, a3, a4, a5, a6, a7, gripper_opening_length) for Joint Position Control
         control_method:  'end' for end effector position control
                          'joint' for joint position control
         """
-        assert control_method in ('joint', 'end')
         new_pose = self.robot.get_ee_pose() + action[:-1]
-        self.robot.move_ee(new_pose, control_method)
+        self.robot.move_ee(new_pose, self.control_method)
         self.robot.move_gripper(action[-1])
         for _ in range(120):  # Wait for a few steps
             self.step_simulation()
@@ -127,7 +126,7 @@ class BoxManipulation(Env):
         reward = self.update_reward()
         terminated = self.box_closed
         self.episode_steps += 1
-        truncated = (self.episode_steps >= self.MAX_EPISODE_STEPS)
+        truncated = False # Managed by the environment automatically 
         #info = dict(box_opened=self.box_opened, button_pressed=self.button_pressed, box_closed=self.box_closed)
         info = dict(is_success=self.box_closed)
 
@@ -175,6 +174,8 @@ class BoxManipulation(Env):
     def reset(self, *, seed: Optional[int] = None, options: Optional[dict] = None):
         super().reset(seed=seed)
         self.robot.reset()
+        ee_pose = self.robot.get_ee_pose()
+        self.robot.move_ee(ee_pose, self.control_method)
         self.reset_box()
         self.episode_steps = 0
         return self.get_observation(), {}
@@ -214,5 +215,6 @@ class BoxManipulation(Env):
 register(
     id='ur5/box',
     entry_point='ur5.envs.env_box:BoxManipulation',
-    max_episode_steps=50,
+    max_episode_steps=200,
+    kwargs=dict(button_touch_mode='any')
 )
