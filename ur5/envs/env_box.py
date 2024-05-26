@@ -16,7 +16,7 @@ from ur5.robot import Panda, UR5Robotiq85, UR5Robotiq140
 class BoxManipulation(Env):
 
     SIMULATION_STEP_DELAY = 1 / 240.
-    MAX_EPISODE_STEPS = 50
+    MAX_EPISODE_STEPS = 200
 
     def __init__(self, button_touch_mode:str='any', camera=None, render_mode='human') -> None:
             """
@@ -118,7 +118,8 @@ class BoxManipulation(Env):
                          'joint' for joint position control
         """
         assert control_method in ('joint', 'end')
-        self.robot.move_ee(action[:-1], control_method)
+        new_pose = self.robot.get_ee_pose() + action[:-1]
+        self.robot.move_ee(new_pose, control_method)
         self.robot.move_gripper(action[-1])
         for _ in range(120):  # Wait for a few steps
             self.step_simulation()
