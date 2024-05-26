@@ -133,9 +133,9 @@ class RobotBase(object):
             pos, vel, _, _ = p.getJointState(self.id, joint_id)
             positions.append(pos)
             velocities.append(vel)
-        ee_pos = p.getLinkState(self.id, self.eef_id)[0]
-        return dict(positions=positions, velocities=velocities, ee_pos=ee_pos)
-
+        ee_pose = p.getLinkState(self.id, self.eef_id)
+        ee_pose = ee_pose[0] + ee_pose[1] # position + orientation
+        return dict(positions=positions, velocities=velocities, ee_pos=ee_pose)
 
 class Panda(RobotBase):
     def __init_robot__(self):

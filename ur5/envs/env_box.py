@@ -38,8 +38,8 @@ class BoxManipulation(Env):
             self.button_touch_mode = button_touch_mode
 
             # Set observation and action spaces
-            # Observations: just ee coordinate s(x,y,z)
-            self.observation_space = Box(low=np.array([-1.0, -1.0, -1.0]), high=np.array([1.0, 1.0, 1.0]), dtype=np.float64)
+            # Observations: end-effector pose (x,y,z, qx, qy, qz, qw)
+            self.observation_space = Box(low=np.array([-1.0, -1.0, -1.0, -math.pi, -math.pi, -math.pi, -math.pi]), high=np.array([1.0, 1.0, 1.0, math.pi, math.pi, math.pi, math.pi]), dtype=np.float64)
             # Actions: (x, y, z, roll, pitch, yaw, gripper_opening_length [0, 0.085]) for End Effector Position Control
             self.action_space = Box(low=np.array([-1.0, -1.0, -1.0, -math.pi, -math.pi, -math.pi, 0.0]), high=np.array([+1.0, +1.0, +1.0, +math.pi, +math.pi, +math.pi, 0.085]), dtype=np.float32)
 
