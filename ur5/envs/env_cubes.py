@@ -10,7 +10,7 @@ from gymnasium.envs.registration import register
 
 import pybullet as p
 import pybullet_data
-from ur5.utilities import YCBModels, Models, Camera
+from ur5.utilities import YCBModels, Models, Camera, print_links
 from ur5.robot import Panda, UR5Robotiq85, UR5Robotiq140
 
 class CubesManipulation(Env):
@@ -27,8 +27,10 @@ class CubesManipulation(Env):
 
         # Set observation and action spaces
         # Observations: just ee coordinate s(x,y,z)
+        # Observations: the end effector position and quaternion (x, y, z)?
+        # MISSING: position and z_angle of both cubes
         self.observation_space = Box(low=np.array([-1.0, -1.0, -1.0]), high=np.array([1.0, 1.0, 1.0]), dtype=np.float64)
-        # Actions: (x, y, z, roll, pitch, yaw, gripper_status [0,1]) for End Effector Position Control
+        # Actions: (x, y, z, roll, pitch, yaw, mode [0,1]). Mode 0 means sequence open_gripper, move, close_gripper. Model 1 means sequence close_gripper, move, open_gripper
         self.action_space = Box(low=np.array([-1.0, -1.0, -1.0, -math.pi, -math.pi, -math.pi, 0]), high=np.array([+1.0, +1.0, +1.0, +math.pi, +math.pi, +math.pi, 1]), dtype=np.float32)
 
         current_dir = os.path.dirname(__file__)
@@ -88,6 +90,10 @@ class CubesManipulation(Env):
 
         return x, y, z, roll, pitch, yaw, gripper_opening_length
 
+    def wait_simulation_steps(self, sim_steps):
+        for _ in range(sim_steps):
+            self.step_simulation()
+
     def step(self, action, control_method='end'):
         """
         action: (x, y, z, roll, pitch, yaw, gripper_opening_length) for End Effector Position Control
@@ -96,22 +102,35 @@ class CubesManipulation(Env):
                          'joint' for joint position control
         """
         assert control_method in ('joint', 'end')
+
+        if action[-1] < 0.5:
+            self.robot.open_gripper()
+        else:
+            self.robot.close_gripper()
+        self.wait_simulation_steps(120)
+
         self.robot.move_ee(action[:-1], control_method)
+        self.wait_simulation_steps(120)
+
         if action[-1] < 0.5:
             self.robot.close_gripper()
         else:
             self.robot.open_gripper()
-        for _ in range(120):  # Wait for a few steps
-            self.step_simulation()
-
+        self.wait_simulation_steps(120)
+            
         reward = self.update_reward()
+        
+        info = {"is_success": False}
 
-        terminated = False
+        if self.on_top(self.cubes[1], self.cubes[0]):
+            reward += 5
+            terminated = True
+            info["is_success"] = True
+        else:
+            terminated = False
 
         self.episode_steps += 1
         truncated = (self.episode_steps >= self.MAX_EPISODE_STEPS)
-        #info = dict(box_opened=self.box_opened, button_pressed=self.button_pressed, box_closed=self.box_closed)
-        info = {}
 
         reward -= 0.1 # Step penalty
         return self.get_observation(), reward, terminated, truncated, info
@@ -119,12 +138,21 @@ class CubesManipulation(Env):
     def update_reward(self):
         reward = 0
         for id in self.cubes:
-            pos_ori = p.getBasePositionAndOrientation(id)
-            position = pos_ori[0]
-            orientation = pos_ori[1]
-            if position[2] > self.CUBE_RAISE_HEIGHT:
+            pose = p.getBasePositionAndOrientation(id)
+            position = pose[0]
+            if position[2] > self.CUBE_RAISE_HEIGHT: # If a cube is raised
                 reward += 1
         return reward
+    
+    def on_top(self, lower_cube_id, upper_cube_id):
+        lower_cube_pos, _ = p.getBasePositionAndOrientation(lower_cube_id)
+        upper_cube_pos, _ = p.getBasePositionAndOrientation(upper_cube_id)
+        contact_points = p.getContactPoints(lower_cube_id, upper_cube_id)
+        # Check if the upper cube is placed on top of the lower cube
+        if upper_cube_pos[2] > lower_cube_pos[2] and contact_points:
+            print(f"Cube {upper_cube_id} is placed on top of cube {lower_cube_id} and in contact")
+            return True
+        return False
 
     def get_observation(self):
         obs = dict()

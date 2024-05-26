@@ -6,10 +6,13 @@ from tqdm import tqdm
 from ur5.envs.env_box import BoxManipulation
 import time
 import math
+import pybullet as p
 
 
 def user_control_demo():
     env = BoxManipulation()
+    # Show right and left menus
+    p.configureDebugVisualizer(p.COV_ENABLE_GUI,1)
 
     env.reset()
     # env.SIMULATION_STEP_DELAY = 0

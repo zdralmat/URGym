@@ -37,6 +37,7 @@ parser.add_argument('-r', '--recvideo', action="store_true", help='record and st
 parser.add_argument('-t', '--tblog', action="store_true", help='generate tensorboard logs in the \"logs\" directory')
 parser.add_argument('-s', '--save', action="store_true", help='save policy as policies/policy.zip')
 parser.add_argument('-p', '--evaluate', type=str, nargs='?', const='policies/policy.zip', default=None, help='load the policy passed as parameter (if no passed: policies/policy.zip) and executes -n episodes with it')
+parser.add_argument('--name', type=str, help='name of this experiment (for logs and policies)')
 
 args = parser.parse_args()
 
@@ -48,9 +49,11 @@ recvideo = args.recvideo
 tblog_dir = None if args.tblog==False else "./logs"
 save_policy = args.save
 evaluate_policy = args.evaluate 
+experiment_name = args.name
 
 if not evaluate_policy:
 	# Create environment
+	#env = gym.make(str_env, render_mode=None, button_touch_mode='robot')
 	env = gym.make(str_env, render_mode=None)
 
 	print(f"Training for {n_steps} steps with {str_algo}...")
@@ -59,13 +62,11 @@ if not evaluate_policy:
 	model = algo('MlpPolicy', env=env, tensorboard_log=tblog_dir, verbose=True)    
 
 	# Train the agent and display a progress bar
-	checkpoint_callback = CheckpointCallback(save_freq=50_000, save_path='./checkpoints/')
-	model.learn(total_timesteps=int(n_steps), callback=checkpoint_callback, progress_bar=True)
+	checkpoint_callback = CheckpointCallback(save_freq=50_000, save_path=f"./checkpoints/{experiment_name}_{str_algo}")
+	model.learn(total_timesteps=int(n_steps), callback=checkpoint_callback, progress_bar=True, tb_log_name=f"{experiment_name}_{str_algo}")
 
 	if save_policy:
-		model.save("policies/policy.zip")
-
-	env.close()
+		model.save(f"policies/{experiment_name}_{str_algo}_policy.zip")
 else:
 	env = gym.make(str_env, render_mode='human')
 	env = Monitor(env)
@@ -79,7 +80,7 @@ else:
 	for i in range(n_episodes): # episodes
 		print(f"Executing episode {i}... ", end="", flush=True)
 		observation,_ = env.reset()
-		episode_reward = 0
+		episode_reward = 0.0
 		while True:
 			action, _states = model.predict(observation, deterministic=True)
 			observation, reward, terminated, truncated, info = env.step(action)

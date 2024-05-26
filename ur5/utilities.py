@@ -106,3 +106,26 @@ class Camera:
         position[:, :] /= position[:, 3:4]
 
         return position[:, :3].reshape(*x.shape, -1)
+
+def print_links(body_id):
+    """
+    Prints the number of links (parts) in the body and information about each joint/link.
+
+    Parameters:
+    - body_id: The ID of the body
+
+    Returns:
+    None
+    """
+    num_joints = p.getNumJoints(body_id)
+    print("Number of links (parts) in the body:", num_joints)
+
+    # Print base link information (base link has index -1)
+    base_link_name = p.getBodyInfo(body_id)[0].decode('utf-8')
+    print(f"Link ID -1: {base_link_name}")
+
+    # Print information about each joint/link
+    for i in range(num_joints):
+        joint_info = p.getJointInfo(body_id, i)
+        link_name = joint_info[12].decode('utf-8')
+        print(f"Link ID {i}: {link_name}")

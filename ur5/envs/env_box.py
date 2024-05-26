@@ -69,8 +69,8 @@ class BoxManipulation(Env):
             self.robot.step_simulation = self.step_simulation
 
             # custom sliders to tune parameters (name of the parameter,range,initial value)
-            self.xin = p.addUserDebugParameter("x", -0.224, 0.224, 0)
-            self.yin = p.addUserDebugParameter("y", -0.224, 0.224, 0)
+            self.xin = p.addUserDebugParameter("x", -1, 1, 0)
+            self.yin = p.addUserDebugParameter("y", -1, 1, 0)
             self.zin = p.addUserDebugParameter("z", 0, 1., 0.5)
             self.rollId = p.addUserDebugParameter("roll", -3.14, 3.14, 0)
             self.pitchId = p.addUserDebugParameter("pitch", -3.14, 3.14, np.pi/2)
@@ -110,7 +110,7 @@ class BoxManipulation(Env):
 
         return x, y, z, roll, pitch, yaw, gripper_opening_length
 
-    def step(self, action, control_method='end'):
+    def step(self, action, control_method='end') -> tuple[list, float, bool, bool, dict]:
         """
         action: (x, y, z, roll, pitch, yaw, gripper_opening_length) for End Effector Position Control
                 (a1, a2, a3, a4, a5, a6, a7, gripper_opening_length) for Joint Position Control
