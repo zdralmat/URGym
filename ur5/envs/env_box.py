@@ -41,7 +41,7 @@ class BoxManipulation(Env):
             # Observations: end-effector pose (x,y,z, qx, qy, qz, qw)
             self.observation_space = Box(low=np.array([-1.0, -1.0, -1.0, -math.pi, -math.pi, -math.pi, -math.pi]), high=np.array([1.0, 1.0, 1.0, math.pi, math.pi, math.pi, math.pi]), dtype=np.float64)
             # Actions: (x, y, z, roll, pitch, yaw, gripper_opening_length [0, 0.085]) for End Effector Position Control
-            self.action_space = Box(low=np.array([-1.0, -1.0, -1.0, -math.pi, -math.pi, -math.pi, 0.0]), high=np.array([+1.0, +1.0, +1.0, +math.pi, +math.pi, +math.pi, 0.085]), dtype=np.float32)
+            self.action_space = Box(low=np.array([-0.1]*3 + [-math.pi/10]*4 + [0.0]), high=np.array([+0.1]*3 + [+math.pi/10]*4 + [0.085]), dtype=np.float32)
 
             current_dir = os.path.dirname(__file__)
             ycb_models = YCBModels(

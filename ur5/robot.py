@@ -109,9 +109,9 @@ class RobotBase(object):
     def move_ee(self, action, control_method):
         assert control_method in ('joint', 'end')
         if control_method == 'end':
-            x, y, z, roll, pitch, yaw = action
+            x, y, z, qx, qy, qz, qw = action
             pos = (x, y, z)
-            orn = p.getQuaternionFromEuler((roll, pitch, yaw))
+            orn = (qx, qy, qz, qw)
             joint_poses = p.calculateInverseKinematics(self.id, self.eef_id, pos, orn,
                                                        self.arm_lower_limits, self.arm_upper_limits, self.arm_joint_ranges, self.arm_rest_poses,
                                                        maxNumIterations=20)
@@ -133,9 +133,12 @@ class RobotBase(object):
             pos, vel, _, _ = p.getJointState(self.id, joint_id)
             positions.append(pos)
             velocities.append(vel)
+        return dict(positions=positions, velocities=velocities, ee_pos=self.get_ee_pose())
+
+    def get_ee_pose(self):
         ee_pose = p.getLinkState(self.id, self.eef_id)
-        ee_pose = ee_pose[0] + ee_pose[1] # position + orientation
-        return dict(positions=positions, velocities=velocities, ee_pos=ee_pose)
+        ee_pose = ee_pose[0] + ee_pose[1]
+        return ee_pose
 
 class Panda(RobotBase):
     def __init_robot__(self):

@@ -53,8 +53,8 @@ experiment_name = args.name
 
 if not evaluate_policy:
 	# Create environment
-	#env = gym.make(str_env, render_mode=None, button_touch_mode='robot')
-	env = gym.make(str_env, render_mode=None)
+	env = gym.make(str_env, render_mode='human', button_touch_mode='robot')
+	#env = gym.make(str_env, render_mode=None)
 
 	print(f"Training for {n_steps} steps with {str_algo}...")
 
