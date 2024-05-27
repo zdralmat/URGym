@@ -172,3 +172,20 @@ def quaternion_multiply(quat1, quat2):
 
     return w, x, y, z
     
+
+def geometric_distance_reward(value: float, threshold_sign: float, threshold_max: float) -> float:
+    """Returns a geometric reward which is positive from 0 to +1 in the range [0, threshold_sign] and negative for values larger than
+    threshold_sign, approaching -1 in threshold_max  
+
+    Args:
+        value (type): distance value between 0 and infinity.A value of 0 is a reward of +1
+        threshold_sign (type): threshold that divides positive and negative rewards
+        threshold_max (type): maximum value of distance to generate a -1 reward
+
+    Returns:
+        float: a normalized reward between -1 and +1
+    """
+    value = max (value, 1e-10) # To avoid division by zero
+    factor1 = (value - threshold_sign) / value
+    factor2 = max(threshold_max - value, 1e-10)  # To avoid division by zero
+    return -np.tanh(factor1/factor2)

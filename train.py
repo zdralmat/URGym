@@ -51,7 +51,6 @@ render_mode = 'human' if args.visualize else None
 
 # Create environment
 env = gym.make(str_env, render_mode=render_mode)
-#env = gym.make(str_env, render_mode=None)
 
 print(f"Training for {n_steps} steps with {str_algo}...")
 

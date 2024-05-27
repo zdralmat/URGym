@@ -1,3 +1,4 @@
+from sre_compile import dis
 import time
 import math
 from turtle import position
@@ -11,7 +12,7 @@ from gymnasium.envs.registration import register
 
 import pybullet as p
 import pybullet_data
-from ur5.utilities import YCBModels, Models, Camera, rotate_quaternion
+from ur5.utilities import YCBModels, Models, Camera, rotate_quaternion, geometric_distance_reward
 from ur5.robot import Panda, UR5Robotiq85, UR5Robotiq140
 
 class CubesManipulation(Env):
@@ -29,8 +30,8 @@ class CubesManipulation(Env):
         # Observations: the end-effector position and quaternion (x, y, z, qx, qy, qz, qw)
         # And one of the cubes position and quaternion (x, y, z, qx, qy, qz, qw)
         self.observation_space = Box(low=np.array([-1.0]*3 + [-math.pi]*4 + [-1.0]*3 + [-math.pi]*4), high=np.array([1.0]*3 + [math.pi]*4 + [1.0]*3 + [math.pi]*4), dtype=np.float64)
-        # Actions: (x, y, z, qx, qy, qz, qw, mode [0,1]). Mode 0 means sequence open_gripper, move, close_gripper. Model 1 means sequence close_gripper, move, open_gripper
-        self.action_space = Box(low=np.array([-0.05]*3 + [-math.pi/10]*4 + [0]), high=np.array([+0.05]*3 + [+math.pi/10]*4 + [1]), dtype=np.float32)
+        # Actions: prob1,prob2 (x, y, z, qx, qy, qz, qw, mode [0,1]). Mode 0 means sequence open_gripper, move, close_gripper. Model 1 means sequence close_gripper, move, open_gripper
+        self.action_space = Box(low=np.array([0]*2 + [-0.05]*3 + [-math.pi/10]*4 + [0]), high=np.array([1]*2 + [+0.05]*3 + [+math.pi/10]*4 + [1]), dtype=np.float32)
 
         current_dir = os.path.dirname(__file__)
         ycb_models = YCBModels(
@@ -102,19 +103,17 @@ class CubesManipulation(Env):
                          'joint' for joint position control
         """
 
-        if action[-1] < 0.5:
-            self.robot.open_gripper()
+        if action[0] >= action[1]:
+            # Move the end effector
+            new_pose = self.robot.get_ee_pose() + action[2:-1]
+            self.robot.move_ee(new_pose, self.control_method)
         else:
-            self.robot.close_gripper()
-
-        new_pose = self.robot.get_ee_pose() + action[:-1]
-        self.robot.move_ee(new_pose, self.control_method)
-        self.wait_simulation_steps(120)
-        
-        if action[-1] < 0.5:
-            self.robot.close_gripper()
-        else:
-            self.robot.open_gripper()
+            # Move the gripper
+            if action[-1] < 0.5:
+                self.robot.open_gripper()
+            else:
+                self.robot.close_gripper()
+ 
         self.wait_simulation_steps(120)
             
         reward = self.update_reward()
@@ -141,8 +140,11 @@ class CubesManipulation(Env):
         # For getting close to the cube
         ee_pos = self.robot.get_ee_pose()[:3]
         cube_pos = self.get_cube_pose(self.cubes[0])[:3]
+
         distance = np.linalg.norm(np.array(ee_pos) - np.array(cube_pos))
-        reward += 1 - distance
+        distance_reward = geometric_distance_reward(distance, 0.2, 0.5)
+
+        reward += distance_reward
 
         for id in self.cubes:
             pose = p.getBasePositionAndOrientation(id)
@@ -217,7 +219,7 @@ class CubesManipulation(Env):
     
 # Register the environment
 register(
-    id='ur5/cubes',
-    entry_point='ur5.envs.env_cubes:CubesManipulation',
+    id='ur5/cubes_test',
+    entry_point='ur5.envs.env_cubes_test:CubesManipulation',
     max_episode_steps=10,
 )
