@@ -26,8 +26,12 @@ from stable_baselines3.common.callbacks import CheckpointCallback
 
 from ur5.envs.env_box import BoxManipulation
 from ur5.envs.env_cubes import CubesManipulation
-from ur5.envs.env_cubes_push import CubesPush
+from ur5.envs.env_cubes_test import CubesManipulation
 import gymnasium as gym
+
+from tests.action_sac1 import A_SAC, AdvancedSACPolicy
+from stable_baselines3.sac.policies import SACPolicy
+from torch import nn
 
 parser = argparse.ArgumentParser(description='Train an environment with an SB3 algorithm and saves the final policy (as well as checkpoints every 50k steps).')
 parser.add_argument('-e', '--env', type=str, default="CartPole-v1", help='environment to test (e.g. CartPole-v1)')
@@ -55,8 +59,18 @@ env = gym.make(str_env, render_mode=render_mode)
 
 print(f"Training for {n_steps} steps with {str_algo}...")
 
+# Overwriten for the actor but not for critics
+policy_kwargs = dict(
+	net_arch=dict(pi=[env.action_space.shape[0]], qf=[256, 256]),
+    action_config=dict(n_actions=2, n_nodes=256, layers=[(7, nn.Tanh), (1, nn.Sigmoid)]),
+)
+
+
 # Instantiate the agent
-model = algo('MlpPolicy', env=env, tensorboard_log=tblog_dir, verbose=True)    
+model = algo(AdvancedSACPolicy, env=env, tensorboard_log=tblog_dir, verbose=True, policy_kwargs=policy_kwargs)    
+#model = algo("MlpPolicy", env=env, tensorboard_log=tblog_dir, verbose=True)    
+
+print(model.policy)
 
 # Train the agent and display a progress bar
 checkpoint_callback = CheckpointCallback(save_freq=10_000, save_path=f"./checkpoints/{experiment_name}_{str_algo}")
@@ -64,7 +78,6 @@ model.learn(total_timesteps=int(n_steps), callback=checkpoint_callback, progress
 
 model.save(f"policies/{experiment_name}_{str_algo}_policy.zip")
 model.save_replay_buffer(f"policies/{experiment_name}_{str_algo}_replay_buffer.zip")
-
 
 env.close()
 

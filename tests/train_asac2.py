@@ -25,12 +25,10 @@ from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.callbacks import CheckpointCallback
 
 from ur5.envs.env_box import BoxManipulation
-from ur5.envs.env_cubes import CubesManipulation
-from ur5.envs.env_cubes_test import CubesManipulation
+from ur5.envs.env_cubes_test2 import CubesManipulation
 import gymnasium as gym
 
-from tests.superpolicy import A_SAC, AdvancedSACPolicy
-from stable_baselines3.sac.policies import SACPolicy
+from tests.action_sac2 import A_SAC, AdvancedSACPolicy
 from torch import nn
 
 parser = argparse.ArgumentParser(description='Train an environment with an SB3 algorithm and saves the final policy (as well as checkpoints every 50k steps).')
@@ -62,7 +60,7 @@ print(f"Training for {n_steps} steps with {str_algo}...")
 # Overwriten for the actor but not for critics
 policy_kwargs = dict(
 	net_arch=dict(pi=[env.action_space.shape[0]], qf=[256, 256]),
-    action_config=dict(n_actions=2, n_nodes=256, layers=[(7, nn.Tanh), (1, nn.Sigmoid)]),
+    action_config=dict(n_nodes=256, layers=[(8, nn.Tanh), (2, nn.Sigmoid)]),
 )
 
 
@@ -73,10 +71,12 @@ model = algo(AdvancedSACPolicy, env=env, tensorboard_log=tblog_dir, verbose=True
 print(model.policy)
 
 # Train the agent and display a progress bar
-checkpoint_callback = CheckpointCallback(save_freq=50_000, save_path=f"./checkpoints/{experiment_name}_{str_algo}")
+checkpoint_callback = CheckpointCallback(save_freq=10_000, save_path=f"./checkpoints/{experiment_name}_{str_algo}")
 model.learn(total_timesteps=int(n_steps), callback=checkpoint_callback, progress_bar=True, tb_log_name=f"{experiment_name}_{str_algo}")
 
 model.save(f"policies/{experiment_name}_{str_algo}_policy.zip")
+model.save_replay_buffer(f"policies/{experiment_name}_{str_algo}_replay_buffer.zip")
+
 
 env.close()
 

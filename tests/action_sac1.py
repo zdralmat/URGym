@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional, Tuple, Type, Union
+from typing import Any, Dict, Iterator, List, Optional, Tuple, Type, Union
 
 import torch as th
 import torch.nn as nn
@@ -23,7 +23,7 @@ class SuperNet(nn.Module):
     def __init__(self, features_dim:int, n_actions:int, action_layers:list, n_nodes:int=64):
         super(SuperNet, self).__init__()
 
-        # Subnet 1: 2 outputs between 0 and 1
+        # Subnet for action recommentation: n_actions output between 0 and 1 (probability)
         self.subnet_action_selection = nn.Sequential(
             nn.Linear(features_dim, n_nodes),
             nn.ReLU(),
@@ -31,6 +31,7 @@ class SuperNet(nn.Module):
             nn.Softmax(dim=-1)  # To ensure outputs are probabilities summing to 1
         )
         
+        # Subnets specific for each action
         self.subnet_action = nn.ModuleList()
 
         for i in range(n_actions):
@@ -41,13 +42,12 @@ class SuperNet(nn.Module):
                 nn.Linear(n_nodes, action_layers[i][0]),
                 action_layers[i][1]() 
             )])
- 
+
     def forward(self, x):
         prob_actions = self.subnet_action_selection(x)
         action_outputs = th.cat([subnet_action(x) for subnet_action in self.subnet_action], dim=1)
         return th.cat((prob_actions, action_outputs), dim=1)
-
-
+        
 class AdvancedActor(Actor):
     def __init__(
         self,
@@ -72,7 +72,7 @@ class AdvancedActor(Actor):
         n_nodes = action_config['n_nodes']
         action_layers = action_config['layers']
         self.latent_pi = SuperNet(features_dim=features_dim, n_actions=n_actions, action_layers=action_layers, n_nodes=n_nodes).to(self.device)
-
+    
 class AdvancedSACPolicy(SACPolicy):
     def __init__(
         self,

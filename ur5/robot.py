@@ -140,6 +140,9 @@ class RobotBase(object):
         ee_pose = ee_pose[0] + ee_pose[1]
         return ee_pose
 
+    def get_joint_states(self):
+        return self.get_joint_obs()['positions'][0:6]
+
 class Panda(RobotBase):
     def __init_robot__(self):
         # define the robot

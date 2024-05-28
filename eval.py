@@ -26,10 +26,13 @@ from stable_baselines3.common.callbacks import CheckpointCallback
 
 from ur5.envs.env_box import BoxManipulation
 from ur5.envs.env_cubes import CubesManipulation
+from ur5.envs.env_cubes_push import CubesPush
+from ur5.envs.env_cubes_push_end import CubesPush
 from ur5.envs.env_cubes_test import CubesManipulation
+from ur5.envs.env_cubes_test2 import CubesManipulation
 import gymnasium as gym
 
-from tests.superpolicy import A_SAC
+from tests.action_sac2 import A_SAC
 
 parser = argparse.ArgumentParser(description='Train an environment with an SB3 algorithm and then render 10 episodes.')
 parser.add_argument('-e', '--env', type=str, default="CartPole-v1", help='environment to test (e.g. CartPole-v1)')
@@ -66,7 +69,7 @@ for i in range(n_episodes): # episodes
 		if terminated or truncated:
 			print(f"reward: {episode_reward:.2f}")
 			total_reward += episode_reward
-			observation,_ = env.reset()
+			# observation,_ = env.reset() # Not required, automatic reset
 			break
 print(f"Mean reward: {total_reward/n_episodes:.2f}")
 
