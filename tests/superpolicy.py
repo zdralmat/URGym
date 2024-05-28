@@ -20,37 +20,33 @@ from stable_baselines3.common.torch_layers import (
 )
 
 class SuperNet(nn.Module):
-    def __init__(self, features_dim:int, n_actions:int, action_config:list, n_nodes:int=64):
+    def __init__(self, features_dim:int, n_actions:int, action_layers:list, n_nodes:int=64):
         super(SuperNet, self).__init__()
 
         # Subnet 1: 2 outputs between 0 and 1
         self.subnet_action_selection = nn.Sequential(
             nn.Linear(features_dim, n_nodes),
             nn.ReLU(),
-            nn.Linear(64, n_actions),
+            nn.Linear(n_nodes, n_actions),
             nn.Softmax(dim=-1)  # To ensure outputs are probabilities summing to 1
         )
         
-        self.subnet_action = []
+        self.subnet_action = nn.ModuleList()
 
         for i in range(n_actions):
             # Add the subnets for each action
-            self.subnet_action.append(nn.Sequential(
+            self.subnet_action.extend([nn.Sequential(
                 nn.Linear(features_dim, n_nodes),
                 nn.ReLU(),
-                nn.Linear(n_nodes, action_config[i][0]),
-                action_config[i][1]() 
-            ))
-
-    
+                nn.Linear(n_nodes, action_layers[i][0]),
+                action_layers[i][1]() 
+            )])
+ 
     def forward(self, x):
         prob_actions = self.subnet_action_selection(x)
-        action1_output = self.subnet_action1(x)
-        action2_output = self.subnet_action2(x)
-        
-        aggregated_output = th.cat((prob_actions, action1_output, action2_output), dim=-1)
+        action_outputs = th.cat([subnet_action(x) for subnet_action in self.subnet_action], dim=1)
+        return th.cat((prob_actions, action_outputs), dim=1)
 
-        return aggregated_output
 
 class AdvancedActor(Actor):
     def __init__(
@@ -67,12 +63,15 @@ class AdvancedActor(Actor):
         use_expln: bool = False,
         clip_mean: float = 2.0,
         normalize_images: bool = True,
+        action_config: Optional[Dict[str, Any]] = None,
     ):
         super(AdvancedActor, self).__init__(observation_space, action_space, net_arch, features_extractor, features_dim, activation_fn, 
                                             use_sde, log_std_init, full_std, use_expln, clip_mean, normalize_images)
         
-
-        self.latent_pi = SuperNet(features_dim)
+        n_actions = action_config['n_actions']
+        n_nodes = action_config['n_nodes']
+        action_layers = action_config['layers']
+        self.latent_pi = SuperNet(features_dim=features_dim, n_actions=n_actions, action_layers=action_layers, n_nodes=n_nodes).to(self.device)
 
 class AdvancedSACPolicy(SACPolicy):
     def __init__(
@@ -93,13 +92,18 @@ class AdvancedSACPolicy(SACPolicy):
         optimizer_kwargs: Optional[Dict[str, Any]] = None,
         n_critics: int = 2,
         share_features_extractor: bool = False,
+        action_config: Optional[Dict[str, Any]] = None,
     ):
+        self.action_config = action_config # Here as it is used during the super() call
+        """self.action_config = dict()
+        self.action_config['n_actions'] = 2
+        self.action_config['n_nodes'] = 64
+        self.action_config['layers'] = [(7, nn.Tanh), (1, nn.Sigmoid)]"""
         super(AdvancedSACPolicy, self).__init__(observation_space, action_space, lr_schedule, net_arch, activation_fn, use_sde, log_std_init, use_expln, clip_mean, features_extractor_class, features_extractor_kwargs, normalize_images, optimizer_class, optimizer_kwargs, n_critics, share_features_extractor)
-        
 
     def make_actor(self, features_extractor: Optional[BaseFeaturesExtractor] = None) -> AdvancedActor:
         actor_kwargs = self._update_features_extractor(self.actor_kwargs, features_extractor)
-        actor = AdvancedActor(**actor_kwargs).to(self.device)
+        actor = AdvancedActor(**actor_kwargs, action_config=self.action_config).to(self.device)
         actor.mu = nn.Identity()
         return actor
 

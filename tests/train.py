@@ -61,8 +61,10 @@ print(f"Training for {n_steps} steps with {str_algo}...")
 
 # Overwriten for the actor but not for critics
 policy_kwargs = dict(
-	net_arch=dict(pi=[env.action_space.shape[0]], qf=[256, 256])
+	net_arch=dict(pi=[env.action_space.shape[0]], qf=[256, 256]),
+    action_config=dict(n_actions=2, n_nodes=256, layers=[(7, nn.Tanh), (1, nn.Sigmoid)]),
 )
+
 
 # Instantiate the agent
 model = algo(AdvancedSACPolicy, env=env, tensorboard_log=tblog_dir, verbose=True, policy_kwargs=policy_kwargs)    
