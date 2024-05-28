@@ -210,11 +210,12 @@ class CubesManipulation(Env):
         #self.create_cube(0.1, -0.1, 0.1, [0,0,1,1])
         #self.create_cube(0.1, -0.2, 0.1, [0,1,0,1])
 
+
     def get_cube_pose(self, cube_id):
         position, orientation = p.getBasePositionAndOrientation(cube_id)
         pose = position + orientation
         return pose
-    
+      
 # Register the environment
 register(
     id='ur5/cubes',
