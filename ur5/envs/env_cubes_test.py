@@ -221,5 +221,5 @@ class CubesManipulation(Env):
 register(
     id='ur5/cubes_test',
     entry_point='ur5.envs.env_cubes_test:CubesManipulation',
-    max_episode_steps=10,
+    max_episode_steps=50,
 )

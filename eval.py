@@ -26,7 +26,10 @@ from stable_baselines3.common.callbacks import CheckpointCallback
 
 from ur5.envs.env_box import BoxManipulation
 from ur5.envs.env_cubes import CubesManipulation
+from ur5.envs.env_cubes_test import CubesManipulation
 import gymnasium as gym
+
+from tests.superpolicy import A_SAC
 
 parser = argparse.ArgumentParser(description='Train an environment with an SB3 algorithm and then render 10 episodes.')
 parser.add_argument('-e', '--env', type=str, default="CartPole-v1", help='environment to test (e.g. CartPole-v1)')
