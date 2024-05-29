@@ -38,6 +38,7 @@ parser.add_argument('-r', '--recvideo', action="store_true", help='record and st
 parser.add_argument('-t', '--tblog', action="store_true", help='generate tensorboard logs in the \"logs\" directory')
 parser.add_argument('--name', type=str, default="model", help='name of this experiment (for logs and policies)')
 parser.add_argument('-v', '--visualize', action="store_true", help='visualize the training with render_mode=\'human\'')
+parser.add_argument('-p', '--policy', type=str, default=None, help='policy to load for evaluation, it will also read the replay buffer')
 
 args = parser.parse_args()
 
@@ -49,21 +50,29 @@ recvideo = args.recvideo
 tblog_dir = None if args.tblog==False else "./logs"
 experiment_name = args.name
 render_mode = 'human' if args.visualize else None
+policy_file = args.policy
 
 # Create environment
 env = gym.make(str_env, render_mode=render_mode)
 
 print(f"Training for {n_steps} steps with {str_algo}...")
 
-# Instantiate the agent
-model = algo('MlpPolicy', env=env, tensorboard_log=tblog_dir, verbose=True)    
+if policy_file:
+	model = algo.load(f"{policy_file}", env=env, tensorboard_log=tblog_dir, verbose=True)
+	replay_buffer_file = policy_file.removesuffix("_policy.zip") + "_replay_buffer.pkl"
+	model.load_replay_buffer(replay_buffer_file)
+	reset_tblog = False
+else:
+	# Instantiate the agent
+	model = algo('MlpPolicy', env=env, tensorboard_log=tblog_dir, verbose=True)    
+	reset_tblog = True
 
 # Train the agent and display a progress bar
 checkpoint_callback = CheckpointCallback(save_freq=10_000, save_path=f"./checkpoints/{experiment_name}_{str_algo}")
-model.learn(total_timesteps=int(n_steps), callback=checkpoint_callback, progress_bar=True, tb_log_name=f"{experiment_name}_{str_algo}")
+model.learn(total_timesteps=int(n_steps), callback=checkpoint_callback, progress_bar=True, tb_log_name=f"{experiment_name}_{str_algo}", reset_num_timesteps=reset_tblog)
 
 model.save(f"policies/{experiment_name}_{str_algo}_policy.zip")
-model.save_replay_buffer(f"policies/{experiment_name}_{str_algo}_replay_buffer.zip")
+model.save_replay_buffer(f"policies/{experiment_name}_{str_algo}_replay_buffer.pkl")
 
 
 env.close()
