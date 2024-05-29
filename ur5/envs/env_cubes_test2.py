@@ -140,7 +140,7 @@ class CubesManipulation(Env):
         info = {"is_success": False}
 
         if self.on_top(self.cubes[1], self.cubes[0]):
-            reward += 5
+            reward += 10
             terminated = True
             info["is_success"] = True
         else:
@@ -172,7 +172,7 @@ class CubesManipulation(Env):
             pose = p.getBasePositionAndOrientation(id)
             position = pose[0]
             if position[2] > self.CUBE_RAISE_HEIGHT: # If a cube is raised
-                reward += 10
+                reward += 5
         return reward
     
     def on_top(self, lower_cube_id, upper_cube_id):

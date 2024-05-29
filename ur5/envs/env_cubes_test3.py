@@ -219,7 +219,7 @@ class CubesManipulation(Env):
     
 # Register the environment
 register(
-    id='ur5/cubes_test',
-    entry_point='ur5.envs.env_cubes_test:CubesManipulation',
+    id='ur5/cubes_test3',
+    entry_point='ur5.envs.env_cubes_test3:CubesManipulation',
     max_episode_steps=50,
 )
