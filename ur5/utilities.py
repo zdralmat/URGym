@@ -189,3 +189,17 @@ def geometric_distance_reward(value: float, threshold_sign: float, threshold_max
     factor1 = (value - threshold_sign) / value
     factor2 = max(threshold_max - value, 1e-10)  # To avoid division by zero
     return -np.tanh(factor1/factor2)
+
+def print_link_names_and_indices(id):
+    """
+    Prints the link names and indices of an object.
+
+    :param id: The ID of the object in the PyBullet simulation
+    """
+    num_joints = p.getNumJoints(id)
+    print(f"Object ID: {id} has {num_joints} joints/links.")
+
+    for i in range(num_joints):
+        link_info = p.getJointInfo(id, i)
+        link_name = link_info[12].decode('utf-8')  # Link name is at index 12
+        print(f"Link Index: {i}, Link Name: {link_name}")

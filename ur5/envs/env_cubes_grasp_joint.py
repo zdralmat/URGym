@@ -9,27 +9,20 @@ from gymnasium.spaces import Box
 
 import pybullet as p
 import pybullet_data
-from ur5.utilities import YCBModels, Camera, rotate_quaternion, geometric_distance_reward
+from ur5.utilities import YCBModels, Camera, rotate_quaternion, geometric_distance_reward, print_link_names_and_indices
 from ur5.robot import UR5Robotiq85
 import random
 
 class CubesGrasp(Env):
 
     SIMULATION_STEP_DELAY = 1 / 240.
-    CUBE_RAISE_HEIGHT = 0.2
+    OBJECT_RAISE_HEIGHT = 0.2
 
     def __init__(self, camera=None, render_mode='human') -> None:
         if render_mode == 'human':
             self.vis = True
         else:
             self.vis = False
-
-        # Set observation and action spaces
-        # Observations: the end-effector position and quaternion (x, y, z, qx, qy, qz, qw)
-        # And one of the cubes position and quaternion (x, y, z, qx, qy, qz, qw)
-        self.observation_space = Box(low=np.array([-1.0]*3 + [-math.pi]*4 + [-1.0]*3 + [-math.pi]*4), high=np.array([1.0]*3 + [math.pi]*4 + [1.0]*3 + [math.pi]*4), dtype=np.float64)
-        # Actions: prob1,prob2, joints 1 to 6, gripper action (open/close)
-        self.action_space = Box(low=np.array([0]*2 + [-math.pi/10]*6 + [0]), high=np.array([1]*2 + [+math.pi/10]*6 + [1]), dtype=np.float32)
 
         current_dir = os.path.dirname(__file__)
         ycb_models = YCBModels(
@@ -68,6 +61,13 @@ class CubesGrasp(Env):
 
         self.cubes = []
 
+        # Set observation and action spaces
+        # Observations: the end-effector position and quaternion (x, y, z, qx, qy, qz, qw) and gripper opening length in[0,1]
+        # And the target cube position and quaternion (x, y, z, qx, qy, qz, qw)
+        self.observation_space = Box(low=np.array([-1.0]*3 + [-math.pi]*4 + [0] + [-1.0]*3 + [-math.pi]*4), high=np.array([1.0]*3 + [math.pi]*4 + [1] + [1.0]*3 + [math.pi]*4), dtype=np.float64)
+        # Actions: prob1,prob2, joints 1 to 6, gripper action (open/close)
+        self.action_space = Box(low=np.array([0]*2 + [-math.pi/10]*6 + [0]), high=np.array([1]*2 + [+math.pi/10]*6 + [1]), dtype=np.float32)
+
 
     def step_simulation(self):
         """
@@ -100,6 +100,8 @@ class CubesGrasp(Env):
         control_method:  'end' for end effector position control
                          'joint' for joint position control
         """
+        reward = 0
+        
         action1_prob = action[0]
         action2_prob = action[1]
 
@@ -112,18 +114,23 @@ class CubesGrasp(Env):
             # Move the end effector
             joint_states = self.robot.get_joint_states()
             self.robot.move_ee(joint_states + action[2:-1], self.control_method)
+            # Reward proportional to the distance to the target
+            distance = self.distance_to_target(self.target_id)
+            distance_reward = geometric_distance_reward(distance, 0.1, 0.5)
+            reward += distance_reward
         else:
-            # Move the gripper
+            # Open/close the gripper
             if action[-1] < 0.5:
                 self.robot.open_gripper()
             else:
-                self.robot.close_gripper()
- 
+                self.robot.close_gripper() 
+
         self.wait_simulation_steps(120)
-            
-        reward = self.update_reward()
+
+        reward += self.update_reward()
         
         info = {"is_success": False}
+        terminated = False
 
         # Stacked version
         """if self.on_top(self.cubes[1], self.cubes[0]):
@@ -134,15 +141,18 @@ class CubesGrasp(Env):
             terminated = False"""
 
         # Grasp version
-        if self.cube_grasped(self.cubes[0]):
-            reward += 10
-            terminated = True
-            info["is_success"] = True
-        else:
-            terminated = False
+        if self.object_grasped(self.target_id):
+            if self.status != 'grasped': # Grasped for first time
+                print("Grasped!")
+                self.status = 'grasped'
+                reward += 5
+            if self.status != 'raised' and self.object_raised(self.target_id): # Raised for first time
+                print("Raised!")
+                self.status = 'raised'
+                reward += 10
+                terminated = True
+                info["is_success"] = True
             
-        self.episode_steps += 1
-
         truncated = False # Managed by the environment automatically
 
         reward -= 0.1 # Step penalty
@@ -160,27 +170,46 @@ class CubesGrasp(Env):
 
         reward += distance_reward"""
 
-        if self.touched_with_fingers(self.cubes[0]):
+        """if self.touched_with_fingers(self.cubes[0]):
             print("Touched with fingers!")
-            reward += 0.1
+            reward += 0.1"""
 
         return reward
     
-    def any_cube_grasped(self):
-        for id in self.cubes:
-            contact_points = p.getContactPoints(self.robot.id, id)
-            position,_ = p.getBasePositionAndOrientation(id)
-            if contact_points and position[2] > self.CUBE_RAISE_HEIGHT: # If a cube is raised
-                return True
-        return False
+    def distance_to_target(self, target_id):
+        gripper_center = self.get_gripper_geometrical_center()
+        target_pos = list(self.get_cube_pose(target_id)[:3])
+
+        distance = np.linalg.norm(np.array(gripper_center) - np.array(target_pos))
+        return distance
     
-    def cube_grasped(self, cube_id):
-        contact_points = p.getContactPoints(self.robot.id, cube_id)
-        position,_ = p.getBasePositionAndOrientation(cube_id)
-        if contact_points and position[2] > self.CUBE_RAISE_HEIGHT: # If a cube is raised
+    def object_raised(self, object_id):
+        position,_ = p.getBasePositionAndOrientation(object_id)
+        if self.object_grasped(object_id) and position[2] > self.OBJECT_RAISE_HEIGHT: # If the object is raised
             return True
         return False
     
+    def object_grasped(self, object_id):
+        gripper_link_indices = [11,16]
+        # Get contact points between the robot and the object
+        contact_points = p.getContactPoints(bodyA=self.robot.id, bodyB=object_id)
+        
+        # Initialize a set to keep track of which fingers are touching the object
+        touching_fingers = set()
+        
+        # Iterate over the contact points to check if the specified fingers are touching the object
+        for point in contact_points:
+            link_index = point[3]
+            if link_index in gripper_link_indices:
+                touching_fingers.add(link_index)
+                
+            # If both fingers are touching, return True
+            if len(touching_fingers) == len(gripper_link_indices):
+                return True
+        
+        # If not all specified fingers are touching, return False
+        return False
+
     def on_top(self, lower_cube_id, upper_cube_id):
         lower_cube_pos, _ = p.getBasePositionAndOrientation(lower_cube_id)
         upper_cube_pos, _ = p.getBasePositionAndOrientation(upper_cube_id)
@@ -191,8 +220,8 @@ class CubesGrasp(Env):
             return True
         return False
 
-    def touched_with_fingers(self, cube_id):
-        contact_points = p.getContactPoints(cube_id, self.robot.id)
+    def touched_with_fingers(self, object_id):
+        contact_points = p.getContactPoints(object_id, self.robot.id)
         fingers_indices = list(range(9, 19))
         contact_with_links = any(
             point[4] in fingers_indices or  point[3] in fingers_indices
@@ -213,7 +242,8 @@ class CubesGrasp(Env):
         obs.update(self.robot.get_joint_obs())
 
         obs = np.array(obs["ee_pos"])
-        obs = np.append(obs, self.get_cube_pose(self.cubes[0]))
+        obs = np.append(obs, self.get_gripper_opening_length())
+        obs = np.append(obs, self.get_cube_pose(self.target_id))
         return obs
 
     def reset(self, *, seed: Optional[int] = None, options: Optional[dict] = None):
@@ -221,16 +251,26 @@ class CubesGrasp(Env):
         self.robot.reset()
         self.create_cubes()
 
+        self.target_id = self.cubes[0]
+
+        #print_link_names_and_indices(self.robot.id)
+
         # Position the end effector above the cube
-        new_pose = list(self.get_cube_pose(self.cubes[0]))
-        new_pose[2] += 0.3 # A little bit higher
+        new_pose = list(self.get_cube_pose(self.target_id))
+        new_pose[2] += 0.27 # A little bit higher
+        new_pose[1] += 0.01 # A little bit backwards
         new_pose[3:] = rotate_quaternion(new_pose[3:], math.pi/2, [1, 0, 0]) # Reorient the end effector
         new_pose[3:] = rotate_quaternion(new_pose[3:], math.pi/2, [0, 1, 0]) # Reorient the end effector
         self.robot.move_ee(new_pose, 'end')
         self.robot.open_gripper()
         self.wait_simulation_steps(120)
 
-        self.episode_steps = 0
+        """new_pose[2] -= 0.2 # Just on the cube
+        self.robot.move_ee(new_pose, 'end')
+        self.wait_simulation_steps(120)"""
+
+        self.status = '' # '', 'grasped', 'raised'
+
         return self.get_observation(), {}
 
     def close(self):
@@ -254,5 +294,74 @@ class CubesGrasp(Env):
     def get_cube_pose(self, cube_id):
         position, orientation = p.getBasePositionAndOrientation(cube_id)
         pose = position + orientation
+
         return pose
+
+    def get_gripper_real_opening_length(self):
+        """
+        Calculate the real opening length of the gripper.
+
+        Returns:
+            float: The real opening length of the gripper.
+        """
+        gripper_link_indices = [11, 16]
+        # Get the positions of the gripper links
+        link_state_1 = p.getLinkState(self.robot.id, gripper_link_indices[0])
+        link_state_2 = p.getLinkState(self.robot.id, gripper_link_indices[1])
+
+        # Extract the positions of the two gripper links
+        pos1 = np.array(link_state_1[4])  # World position of the first link
+        pos2 = np.array(link_state_2[4])  # World position of the second link
+
+        # Calculate the distance between the two positions
+        opening_length = np.linalg.norm(pos2 - pos1)
+        opening_length -= 0.052  # Subtract this value to be in the range [0, 0.085]
+
+        return opening_length
     
+    def get_gripper_opening_length(self):
+            """
+            Returns the normalized opening length of the gripper.
+
+            The opening length is clamped to the range indicated by the robot and then normalized
+            based on the minimum and maximum opening lengths of the gripper.
+
+            Returns:
+                float: The normalized opening length of the gripper in [0,1].
+            """
+            value = self.get_gripper_real_opening_length()
+            min_opening_length = self.robot.gripper_range[0]
+            max_opening_length = self.robot.gripper_range[1]
+
+            value = max(min_opening_length, min(max_opening_length, value))  # Clamp the value to the range [0, 0.085]
+
+            normalized_value = (value - min_opening_length) / (max_opening_length - min_opening_length)
+            return normalized_value
+
+    def get_gripper_geometrical_center(self):
+        """
+        Returns the geometrical center of the robot's gripper. This is useful to infer if an object is within the area of the gripper.
+
+        :return: The geometrical center (x, y, z) of the gripper
+        """
+        # Initialize min and max coordinates to extreme values
+        overall_aabb_min = [float('inf'), float('inf'), float('inf')]
+        overall_aabb_max = [float('-inf'), float('-inf'), float('-inf')]
+
+        gripper_link_indices = [11,16]
+
+        # Iterate through each link index in the gripper
+        for link_index in gripper_link_indices:
+            aabb_min, aabb_max = p.getAABB(self.robot.id, link_index)
+            
+            # Update the overall AABB
+            for i in range(3):
+                overall_aabb_min[i] = min(overall_aabb_min[i], aabb_min[i])
+                overall_aabb_max[i] = max(overall_aabb_max[i], aabb_max[i])
+
+        # Calculate the geometrical center
+        geometrical_center = [(overall_aabb_max[i] + overall_aabb_min[i]) / 2 for i in range(3)]
+
+        #print(f"Geometrical center of gripper: {geometrical_center}")
+
+        return geometrical_center
