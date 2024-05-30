@@ -19,9 +19,9 @@ from stable_baselines3.common.torch_layers import (
     get_actor_critic_arch,
 )
 
-class SuperNet(nn.Module):
+class ActionNN(nn.Module):
     def __init__(self, features_dim:int, n_actions:int, action_layers:list, n_nodes:int=64):
-        super(SuperNet, self).__init__()
+        super(ActionNN, self).__init__()
 
         # Subnet for action recommentation: n_actions output between 0 and 1 (probability)
         self.subnet_action_selection = nn.Sequential(
@@ -83,7 +83,7 @@ class SuperNet(nn.Module):
             output_values.register_hook(hook)
         return output_values
         
-class AdvancedActor(Actor):
+class ActionSACActor(Actor):
     def __init__(
         self,
         observation_space: spaces.Space,
@@ -100,15 +100,15 @@ class AdvancedActor(Actor):
         normalize_images: bool = True,
         action_config: Optional[Dict[str, Any]] = None,
     ):
-        super(AdvancedActor, self).__init__(observation_space, action_space, net_arch, features_extractor, features_dim, activation_fn, 
+        super(ActionSACActor, self).__init__(observation_space, action_space, net_arch, features_extractor, features_dim, activation_fn, 
                                             use_sde, log_std_init, full_std, use_expln, clip_mean, normalize_images)
         
         n_actions = action_config['n_actions']
         n_nodes = action_config['n_nodes']
         action_layers = action_config['layers']
-        self.latent_pi = SuperNet(features_dim=features_dim, n_actions=n_actions, action_layers=action_layers, n_nodes=n_nodes).to(self.device)
+        self.latent_pi = ActionNN(features_dim=features_dim, n_actions=n_actions, action_layers=action_layers, n_nodes=n_nodes).to(self.device)
     
-class AdvancedSACPolicy(SACPolicy):
+class ActionSACPolicy(SACPolicy):
     def __init__(
         self,
         observation_space: spaces.Space,
@@ -134,18 +134,18 @@ class AdvancedSACPolicy(SACPolicy):
         self.action_config['n_actions'] = 2
         self.action_config['n_nodes'] = 64
         self.action_config['layers'] = [(7, nn.Tanh), (1, nn.Sigmoid)]"""
-        super(AdvancedSACPolicy, self).__init__(observation_space, action_space, lr_schedule, net_arch, activation_fn, use_sde, log_std_init, use_expln, clip_mean, features_extractor_class, features_extractor_kwargs, normalize_images, optimizer_class, optimizer_kwargs, n_critics, share_features_extractor)
+        super(ActionSACPolicy, self).__init__(observation_space, action_space, lr_schedule, net_arch, activation_fn, use_sde, log_std_init, use_expln, clip_mean, features_extractor_class, features_extractor_kwargs, normalize_images, optimizer_class, optimizer_kwargs, n_critics, share_features_extractor)
 
-    def make_actor(self, features_extractor: Optional[BaseFeaturesExtractor] = None) -> AdvancedActor:
+    def make_actor(self, features_extractor: Optional[BaseFeaturesExtractor] = None) -> ActionSACActor:
         actor_kwargs = self._update_features_extractor(self.actor_kwargs, features_extractor)
-        actor = AdvancedActor(**actor_kwargs, action_config=self.action_config).to(self.device)
+        actor = ActionSACActor(**actor_kwargs, action_config=self.action_config).to(self.device)
         actor.mu = nn.Identity()
         return actor
 
 
-class A_SAC(SAC):
-    policy: AdvancedSACPolicy
-    actor: AdvancedActor
+class ActionSAC(SAC):
+    policy: ActionSACPolicy
+    actor: ActionSACActor
 
     def __init__(
         self,

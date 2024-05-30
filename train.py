@@ -24,10 +24,10 @@ from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.callbacks import CheckpointCallback
 
-from ur5.envs.env_box import BoxManipulation
-from ur5.envs.env_cubes import CubesManipulation
-from ur5.envs.env_cubes_push import CubesPush
+from ur5.algos import ActionSAC, ActionSACPolicy
+import ur5.envs 
 import gymnasium as gym
+from stable_baselines3.common.utils import set_random_seed
 
 parser = argparse.ArgumentParser(description='Train an environment with an SB3 algorithm and saves the final policy (as well as checkpoints every 50k steps).')
 parser.add_argument('-e', '--env', type=str, default="CartPole-v1", help='environment to test (e.g. CartPole-v1)')
@@ -51,6 +51,8 @@ tblog_dir = None if args.tblog==False else "./logs"
 experiment_name = args.name
 render_mode = 'human' if args.visualize else None
 policy_file = args.policy
+
+set_random_seed(42)
 
 # Create environment
 env = gym.make(str_env, render_mode=render_mode)

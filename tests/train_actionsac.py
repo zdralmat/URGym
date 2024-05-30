@@ -24,14 +24,12 @@ from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.callbacks import CheckpointCallback
 
-from ur5.envs.env_box import BoxManipulation
-from ur5.envs.env_cubes import CubesManipulation
-from ur5.envs.env_cubes_test import CubesManipulation
+import ur5.envs
 import gymnasium as gym
 
-from tests.action_sac1 import A_SAC, AdvancedSACPolicy
-from stable_baselines3.sac.policies import SACPolicy
+from ur5.algos import ActionSAC, ActionSACPolicy
 from torch import nn
+from stable_baselines3.common.utils import set_random_seed
 
 parser = argparse.ArgumentParser(description='Train an environment with an SB3 algorithm and saves the final policy (as well as checkpoints every 50k steps).')
 parser.add_argument('-e', '--env', type=str, default="CartPole-v1", help='environment to test (e.g. CartPole-v1)')
@@ -46,13 +44,15 @@ parser.add_argument('-v', '--visualize', action="store_true", help='visualize th
 args = parser.parse_args()
 
 str_env = args.env
-str_algo = args.algo.upper()
+str_algo = args.algo
 algo = getattr(sys.modules[__name__], str_algo) # Obtains the classname based on the string
 n_steps = args.nsteps
 recvideo = args.recvideo
 tblog_dir = None if args.tblog==False else "./logs"
 experiment_name = args.name
 render_mode = 'human' if args.visualize else None
+
+set_random_seed(42)
 
 # Create environment
 env = gym.make(str_env, render_mode=render_mode)
@@ -62,13 +62,11 @@ print(f"Training for {n_steps} steps with {str_algo}...")
 # Overwriten for the actor but not for critics
 policy_kwargs = dict(
 	net_arch=dict(pi=[env.action_space.shape[0]], qf=[256, 256]),
-    action_config=dict(n_actions=2, n_nodes=256, layers=[(7, nn.Tanh), (1, nn.Sigmoid)]),
+    action_config=dict(n_actions=2, n_nodes=256, layers=[(6, nn.Tanh), (1, nn.Sigmoid)]),
 )
 
-
 # Instantiate the agent
-model = algo(AdvancedSACPolicy, env=env, tensorboard_log=tblog_dir, verbose=True, policy_kwargs=policy_kwargs)    
-#model = algo("MlpPolicy", env=env, tensorboard_log=tblog_dir, verbose=True)    
+model = algo(ActionSACPolicy, env=env, tensorboard_log=tblog_dir, verbose=True, policy_kwargs=policy_kwargs)    
 
 print(model.policy)
 

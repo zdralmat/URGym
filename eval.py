@@ -26,13 +26,14 @@ from stable_baselines3.common.callbacks import CheckpointCallback
 
 from ur5.envs.env_box import BoxManipulation
 from ur5.envs.env_cubes import CubesManipulation
-from ur5.envs.env_cubes_push import CubesPush
+from ur5.envs.env_cubes_push_joint import CubesPush
 from ur5.envs.env_cubes_push_end import CubesPush
 from ur5.envs.env_cubes_test import CubesManipulation
 from ur5.envs.env_cubes_test2 import CubesManipulation
 import gymnasium as gym
-
-from tests.action_sac2 import A_SAC
+import ur5.envs
+from ur5.algos import ActionSAC
+from stable_baselines3.common.utils import set_random_seed
 
 parser = argparse.ArgumentParser(description='Train an environment with an SB3 algorithm and then render 10 episodes.')
 parser.add_argument('-e', '--env', type=str, default="CartPole-v1", help='environment to test (e.g. CartPole-v1)')
@@ -44,11 +45,12 @@ parser.add_argument('-n', '--nepisodes', type=int, default=10, help='number of e
 args = parser.parse_args()
 
 str_env = args.env
-str_algo = args.algo.upper()
+str_algo = args.algo
 algo = getattr(sys.modules[__name__], str_algo) # Obtains the classname based on the string
 n_episodes = args.nepisodes
 policy_file = args.policy
 
+set_random_seed(42)
 
 env = gym.make(str_env, render_mode='human')
 env = Monitor(env)

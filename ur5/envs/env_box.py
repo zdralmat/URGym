@@ -209,12 +209,3 @@ class BoxManipulation(Env):
                 if contact_with_links:
                     return True
         return False
-
-
-# Register the environment
-register(
-    id='ur5/box',
-    entry_point='ur5.envs.env_box:BoxManipulation',
-    max_episode_steps=200,
-    kwargs=dict(button_touch_mode='any')
-)

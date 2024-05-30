@@ -1,40 +1,35 @@
-from sre_compile import dis
 import time
 import math
-from turtle import position
 import numpy as np
 from typing import Optional
 import os
-import random
 
 from gymnasium import Env
 from gymnasium.spaces import Box
-from gymnasium.envs.registration import register
 
 import pybullet as p
 import pybullet_data
-from ur5.utilities import YCBModels, Models, Camera, rotate_quaternion, geometric_distance_reward
-from ur5.robot import Panda, UR5Robotiq85, UR5Robotiq140
+from ur5.utilities import YCBModels, Camera, rotate_quaternion, geometric_distance_reward
+from ur5.robot import UR5Robotiq85
+import random
 
-class CubesPush(Env):
+class CubesGrasp(Env):
 
     SIMULATION_STEP_DELAY = 1 / 240.
+    CUBE_RAISE_HEIGHT = 0.2
 
-    def __init__(self, camera=None, reward_type='dense',  render_mode='human') -> None:
-
-        self.reward_type = reward_type
-
+    def __init__(self, camera=None, render_mode='human') -> None:
         if render_mode == 'human':
-            self.visualize = True
+            self.vis = True
         else:
-            self.visualize = False
+            self.vis = False
 
         # Set observation and action spaces
         # Observations: the end-effector position and quaternion (x, y, z, qx, qy, qz, qw)
-        # And position (x, y, z) of the two cubes
-        self.observation_space = Box(low=np.array([-1.0]*3 + [-math.pi]*4 + [-1.0]*6), high=np.array([1.0]*3 + [math.pi]*4 + [1.0]*6), dtype=np.float64)
-        # Actions: joints 1 to 6
-        self.action_space = Box(low=np.array([-math.pi]*6), high=np.array([+math.pi]*6), dtype=np.float32)
+        # And one of the cubes position and quaternion (x, y, z, qx, qy, qz, qw)
+        self.observation_space = Box(low=np.array([-1.0]*3 + [-math.pi]*4 + [-1.0]*3 + [-math.pi]*4), high=np.array([1.0]*3 + [math.pi]*4 + [1.0]*3 + [math.pi]*4), dtype=np.float64)
+        # Actions: prob1,prob2, joints 1 to 6, gripper action (open/close)
+        self.action_space = Box(low=np.array([0]*2 + [-math.pi/10]*6 + [0]), high=np.array([1]*2 + [+math.pi/10]*6 + [1]), dtype=np.float32)
 
         current_dir = os.path.dirname(__file__)
         ycb_models = YCBModels(
@@ -49,7 +44,7 @@ class CubesPush(Env):
         self.robot = UR5Robotiq85((0, 0.5, 0), (0, 0, 0))
 
         # define environment        
-        self.physicsClient = p.connect(p.GUI if self.visualize else p.DIRECT)
+        self.physicsClient = p.connect(p.GUI if self.vis else p.DIRECT)
         p.setAdditionalSearchPath(pybullet_data.getDataPath())
         p.setGravity(0, 0, -10)
         # Hide right and left menus
@@ -79,7 +74,7 @@ class CubesPush(Env):
         Hook p.stepSimulation()
         """
         p.stepSimulation()
-        if self.visualize:
+        if self.vis:
             time.sleep(self.SIMULATION_STEP_DELAY)
 
     def read_debug_parameter(self):
@@ -105,62 +100,86 @@ class CubesPush(Env):
         control_method:  'end' for end effector position control
                          'joint' for joint position control
         """
+        action1_prob = action[0]
+        action2_prob = action[1]
 
-        reward = 0
+        action1_actions = action[2:-1]
+        action2_actions = action[-1]
 
-        #new_pose = self.robot.get_ee_pose() + action
-        
-        """# Differential version
-        joints = self.robot.get_joint_states()
-        joints += action
-        self.robot.move_ee(joints, self.control_method)
-        """
+        action_selected = random.choices([0, 1], weights=[action1_prob, action2_prob], k=1)[0]
 
-        self.robot.move_ee(action, self.control_method)
-
+        if action_selected == 0:
+            # Move the end effector
+            joint_states = self.robot.get_joint_states()
+            self.robot.move_ee(joint_states + action[2:-1], self.control_method)
+        else:
+            # Move the gripper
+            if action[-1] < 0.5:
+                self.robot.open_gripper()
+            else:
+                self.robot.close_gripper()
+ 
         self.wait_simulation_steps(120)
             
-        reward, success = self.update_reward()
+        reward = self.update_reward()
+        
+        info = {"is_success": False}
 
-        info = {"is_success": success}
-        terminated = success
+        # Stacked version
+        """if self.on_top(self.cubes[1], self.cubes[0]):
+            reward += 10
+            terminated = True
+            info["is_success"] = True
+        else:
+            terminated = False"""
 
-        if success:
-            print("SUCCESS!")
+        # Grasp version
+        if self.cube_grasped(self.cubes[0]):
+            reward += 10
+            terminated = True
+            info["is_success"] = True
+        else:
+            terminated = False
+            
+        self.episode_steps += 1
 
         truncated = False # Managed by the environment automatically
 
         reward -= 0.1 # Step penalty
-
-        #print(f"Reward: {reward:.2f}")
-
         return self.get_observation(), reward, terminated, truncated, info
 
-    def update_reward(self) -> tuple[float, bool]:
+    def update_reward(self):
         reward = 0
 
-        if self.reward_type == 'dense':
-            # Dense reward: the distance between the cubes
-            cube1_pos = self.get_cube_pose(self.cubes[0])[:3]
-            cube2_pos = self.get_cube_pose(self.cubes[1])[:3]
-            distance = np.linalg.norm(np.array(cube1_pos) - np.array(cube2_pos))
+        """# For getting close to the cube
+        ee_pos = self.robot.get_ee_pose()[:3]
+        cube_pos = self.get_cube_pose(self.cubes[0])[:3]
 
-            reward += geometric_distance_reward(distance, 0.1, 0.5) / 10
+        distance = np.linalg.norm(np.array(ee_pos) - np.array(cube_pos))
+        distance_reward = geometric_distance_reward(distance, 0.2, 0.5)
 
-        # Sparse reward: if the distance between the cubes is less than 0.05
-        if self.are_cubes_close(self.cubes[0], self.cubes[1], 0.05):
-            reward += 10
-            sucess = True
-        else:
-            sucess = False
+        reward += distance_reward"""
 
-        return reward, sucess
+        if self.touched_with_fingers(self.cubes[0]):
+            print("Touched with fingers!")
+            reward += 0.1
+
+        return reward
     
-    def are_cubes_close(self, cube1_id, cube2_id, threshold=0.05):
-        cube1_pos = self.get_cube_pose(cube1_id)[:3]
-        cube2_pos = self.get_cube_pose(cube2_id)[:3]
-        distance = np.linalg.norm(np.array(cube1_pos) - np.array(cube2_pos))
-        return distance < threshold
+    def any_cube_grasped(self):
+        for id in self.cubes:
+            contact_points = p.getContactPoints(self.robot.id, id)
+            position,_ = p.getBasePositionAndOrientation(id)
+            if contact_points and position[2] > self.CUBE_RAISE_HEIGHT: # If a cube is raised
+                return True
+        return False
+    
+    def cube_grasped(self, cube_id):
+        contact_points = p.getContactPoints(self.robot.id, cube_id)
+        position,_ = p.getBasePositionAndOrientation(cube_id)
+        if contact_points and position[2] > self.CUBE_RAISE_HEIGHT: # If a cube is raised
+            return True
+        return False
     
     def on_top(self, lower_cube_id, upper_cube_id):
         lower_cube_pos, _ = p.getBasePositionAndOrientation(lower_cube_id)
@@ -169,6 +188,17 @@ class CubesPush(Env):
         # Check if the upper cube is placed on top of the lower cube
         if upper_cube_pos[2] > lower_cube_pos[2] and contact_points:
             print(f"Cube {upper_cube_id} is placed on top of cube {lower_cube_id} and in contact")
+            return True
+        return False
+
+    def touched_with_fingers(self, cube_id):
+        contact_points = p.getContactPoints(cube_id, self.robot.id)
+        fingers_indices = list(range(9, 19))
+        contact_with_links = any(
+            point[4] in fingers_indices or  point[3] in fingers_indices
+            for point in contact_points
+        )
+        if contact_with_links:
             return True
         return False
 
@@ -183,9 +213,7 @@ class CubesPush(Env):
         obs.update(self.robot.get_joint_obs())
 
         obs = np.array(obs["ee_pos"])
-        cube1_position = self.get_cube_pose(self.cubes[0])[:3]
-        cube2_position = self.get_cube_pose(self.cubes[1])[:3]
-        obs = np.append(obs, [cube1_position, cube2_position])
+        obs = np.append(obs, self.get_cube_pose(self.cubes[0]))
         return obs
 
     def reset(self, *, seed: Optional[int] = None, options: Optional[dict] = None):
@@ -199,9 +227,10 @@ class CubesPush(Env):
         new_pose[3:] = rotate_quaternion(new_pose[3:], math.pi/2, [1, 0, 0]) # Reorient the end effector
         new_pose[3:] = rotate_quaternion(new_pose[3:], math.pi/2, [0, 1, 0]) # Reorient the end effector
         self.robot.move_ee(new_pose, 'end')
-        self.robot.close_gripper()
+        self.robot.open_gripper()
         self.wait_simulation_steps(120)
 
+        self.episode_steps = 0
         return self.get_observation(), {}
 
     def close(self):
@@ -217,10 +246,8 @@ class CubesPush(Env):
         for id in self.cubes:
             p.removeBody(id)
         self.cubes = []
-        coors = [random.uniform(-0.3, -0.1) + (0.4 if random.random() > 0.5 else 0) for _ in range(4)]
-
-        self.create_cube(coors[0], coors[1], 0.2)
-        self.create_cube(coors[2], coors[3], 0.2, [1,0,0,1]) 
+        self.create_cube(0.0, -0.1, 0.1)
+        self.create_cube(0.0, -0.2, 0.1, [1,0,0,1])
         #self.create_cube(0.1, -0.1, 0.1, [0,0,1,1])
         #self.create_cube(0.1, -0.2, 0.1, [0,1,0,1])
 
@@ -229,9 +256,3 @@ class CubesPush(Env):
         pose = position + orientation
         return pose
     
-# Register the environment
-register(
-    id='ur5/cubes_push',
-    entry_point='ur5.envs.env_cubes_push:CubesPush',
-    max_episode_steps=50,
-)
