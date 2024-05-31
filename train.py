@@ -24,8 +24,8 @@ from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.callbacks import CheckpointCallback
 
-from ur5.algos import ActionSAC, ActionSACPolicy
-import ur5.envs 
+from urgym.algos import ActionSAC, ActionSACPolicy
+import urgym.envs 
 import gymnasium as gym
 from stable_baselines3.common.utils import set_random_seed
 

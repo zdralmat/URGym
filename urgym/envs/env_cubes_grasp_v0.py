@@ -9,8 +9,8 @@ from gymnasium.spaces import Box
 
 import pybullet as p
 import pybullet_data
-from ur5.utilities import YCBModels, Camera, rotate_quaternion, geometric_distance_reward, print_link_names_and_indices
-from ur5.robot import UR5Robotiq85
+from urgym.utilities import YCBModels, Camera, rotate_quaternion, geometric_distance_reward, print_link_names_and_indices
+from urgym.robot import UR5Robotiq85
 import random
 
 class CubesGrasp(Env):

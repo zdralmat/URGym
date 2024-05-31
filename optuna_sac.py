@@ -8,7 +8,7 @@ import optuna
 from stable_baselines3 import SAC
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.utils import set_random_seed
-import ur5.envs
+import urgym.envs
 
 # Define the SAC hyperparameters to optimize
 hyperparameters = {

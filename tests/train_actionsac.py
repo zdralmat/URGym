@@ -24,10 +24,10 @@ from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.callbacks import CheckpointCallback
 
-import ur5.envs
+import urgym.envs
 import gymnasium as gym
 
-from ur5.algos import ActionSAC, ActionSACPolicy
+from urgym.algos import ActionSAC, ActionSACPolicy
 from torch import nn
 from stable_baselines3.common.utils import set_random_seed
 

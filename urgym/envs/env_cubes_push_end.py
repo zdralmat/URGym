@@ -13,8 +13,8 @@ from gymnasium.envs.registration import register
 
 import pybullet as p
 import pybullet_data
-from ur5.utilities import YCBModels, Models, Camera, rotate_quaternion, geometric_distance_reward
-from ur5.robot import Panda, UR5Robotiq85, UR5Robotiq140
+from urgym.utilities import YCBModels, Models, Camera, rotate_quaternion, geometric_distance_reward
+from urgym.robot import Panda, UR5Robotiq85, UR5Robotiq140
 
 class CubesPush(Env):
 
@@ -222,6 +222,6 @@ class CubesPush(Env):
 # Register the environment
 register(
     id='ur5/cubes_push_end',
-    entry_point='ur5.envs.env_cubes_push_end:CubesPush',
+    entry_point='urgym.envs.env_cubes_push_end:CubesPush',
     max_episode_steps=50,
 )

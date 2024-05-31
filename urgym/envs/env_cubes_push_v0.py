@@ -13,26 +13,28 @@ from gymnasium.envs.registration import register
 
 import pybullet as p
 import pybullet_data
-from ur5.utilities import YCBModels, Models, Camera, rotate_quaternion, geometric_distance_reward
-from ur5.robot import Panda, UR5Robotiq85, UR5Robotiq140
+from urgym.utilities import YCBModels, Models, Camera, rotate_quaternion, geometric_distance_reward
+from urgym.robot import Panda, UR5Robotiq85, UR5Robotiq140
 
-class CubesManipulation(Env):
+class CubesPush(Env):
 
     SIMULATION_STEP_DELAY = 1 / 240.
-    CUBE_RAISE_HEIGHT = 0.2
 
-    def __init__(self, camera=None, render_mode='human') -> None:
+    def __init__(self, camera=None, reward_type='dense',  render_mode='human') -> None:
+
+        self.reward_type = reward_type
+
         if render_mode == 'human':
-            self.vis = True
+            self.visualize = True
         else:
-            self.vis = False
+            self.visualize = False
 
         # Set observation and action spaces
         # Observations: the end-effector position and quaternion (x, y, z, qx, qy, qz, qw)
-        # And one of the cubes position and quaternion (x, y, z, qx, qy, qz, qw)
-        self.observation_space = Box(low=np.array([-1.0]*3 + [-math.pi]*4 + [-1.0]*3 + [-math.pi]*4), high=np.array([1.0]*3 + [math.pi]*4 + [1.0]*3 + [math.pi]*4), dtype=np.float64)
-        # Actions: (prob1, x, y, z, qx, qy, qz, qw, prob2, mode [0,1]). Mode 0 means sequence open_gripper, move, close_gripper. Model 1 means sequence close_gripper, move, open_gripper
-        self.action_space = Box(low=np.array([0] + [-0.05]*3 + [-math.pi/10]*4 + [0] + [0]), high=np.array([1] + [+0.05]*3 + [+math.pi/10]*4 + [1] + [1]), dtype=np.float32)
+        # And position (x, y, z) of the two cubes
+        self.observation_space = Box(low=np.array([-1.0]*3 + [-math.pi]*4 + [-1.0]*6), high=np.array([1.0]*3 + [math.pi]*4 + [1.0]*6), dtype=np.float64)
+        # Actions: joints 1 to 6
+        self.action_space = Box(low=np.array([-math.pi]*6), high=np.array([+math.pi]*6), dtype=np.float32)
 
         current_dir = os.path.dirname(__file__)
         ycb_models = YCBModels(
@@ -47,7 +49,7 @@ class CubesManipulation(Env):
         self.robot = UR5Robotiq85((0, 0.5, 0), (0, 0, 0))
 
         # define environment        
-        self.physicsClient = p.connect(p.GUI if self.vis else p.DIRECT)
+        self.physicsClient = p.connect(p.GUI if self.visualize else p.DIRECT)
         p.setAdditionalSearchPath(pybullet_data.getDataPath())
         p.setGravity(0, 0, -10)
         # Hide right and left menus
@@ -58,7 +60,7 @@ class CubesManipulation(Env):
 
         self.robot.load()
         self.robot.step_simulation = self.step_simulation
-        self.control_method = 'end'
+        self.control_method = 'joint'
 
         # custom sliders to tune parameters (name of the parameter,range,initial value)
         self.xin = p.addUserDebugParameter("x", -0.224, 0.224, 0)
@@ -77,7 +79,7 @@ class CubesManipulation(Env):
         Hook p.stepSimulation()
         """
         p.stepSimulation()
-        if self.vis:
+        if self.visualize:
             time.sleep(self.SIMULATION_STEP_DELAY)
 
     def read_debug_parameter(self):
@@ -106,74 +108,59 @@ class CubesManipulation(Env):
 
         reward = 0
 
-        action1_prob = action[0]
-        action2_prob = action[-2]
+        #new_pose = self.robot.get_ee_pose() + action
+        
+        """# Differential version
+        joints = self.robot.get_joint_states()
+        joints += action
+        self.robot.move_ee(joints, self.control_method)
+        """
 
-        action1_actions = action[1:-2]
-        action2_actions = action[-1]
+        self.robot.move_ee(action, self.control_method)
 
-        action_selected = random.choices([0, 1], weights=[action1_prob, action2_prob], k=1)[0]
-
-        # Curiosity reward, to apply at the end
-        curiosity_reward_factor = 0
-        if action_selected != np.argmax([action1_prob, action2_prob]):
-            #print("Curiosity reward!")
-            curiosity_reward_factor = 0.20
-
-        if action_selected == 0:
-        #if random.random() < action1_prob:
-        #if action1_prob >= action2_prob:
-            # Move the end effector
-            new_pose = self.robot.get_ee_pose() + action1_actions
-            self.robot.move_ee(new_pose, self.control_method)
-        else:
-            # Move the gripper
-            if action2_actions < 0.5:
-                self.robot.open_gripper()
-            else:
-                self.robot.close_gripper()
- 
         self.wait_simulation_steps(120)
             
-        reward += self.update_reward()
+        reward, success = self.update_reward()
 
-        info = {"is_success": False}
+        info = {"is_success": success}
+        terminated = success
 
-        if self.on_top(self.cubes[1], self.cubes[0]):
-            reward += 10
-            terminated = True
-            info["is_success"] = True
-        else:
-            terminated = False
-
-        self.episode_steps += 1
+        if success:
+            print("SUCCESS!")
 
         truncated = False # Managed by the environment automatically
 
         reward -= 0.1 # Step penalty
 
-        reward = reward + abs(reward) * curiosity_reward_factor
+        #print(f"Reward: {reward:.2f}")
 
         return self.get_observation(), reward, terminated, truncated, info
 
-    def update_reward(self):
+    def update_reward(self) -> tuple[float, bool]:
         reward = 0
 
-        # For getting close to the cube
-        ee_pos = self.robot.get_ee_pose()[:3]
-        cube_pos = self.get_cube_pose(self.cubes[0])[:3]
+        if self.reward_type == 'dense':
+            # Dense reward: the distance between the cubes
+            cube1_pos = self.get_cube_pose(self.cubes[0])[:3]
+            cube2_pos = self.get_cube_pose(self.cubes[1])[:3]
+            distance = np.linalg.norm(np.array(cube1_pos) - np.array(cube2_pos))
 
-        distance = np.linalg.norm(np.array(ee_pos) - np.array(cube_pos))
-        distance_reward = geometric_distance_reward(distance, 0.2, 0.5)
+            reward += geometric_distance_reward(distance, 0.1, 0.5) / 10
 
-        reward += distance_reward
+        # Sparse reward: if the distance between the cubes is less than 0.05
+        if self.are_cubes_close(self.cubes[0], self.cubes[1], 0.05):
+            reward += 10
+            sucess = True
+        else:
+            sucess = False
 
-        for id in self.cubes:
-            pose = p.getBasePositionAndOrientation(id)
-            position = pose[0]
-            if position[2] > self.CUBE_RAISE_HEIGHT: # If a cube is raised
-                reward += 5
-        return reward
+        return reward, sucess
+    
+    def are_cubes_close(self, cube1_id, cube2_id, threshold=0.05):
+        cube1_pos = self.get_cube_pose(cube1_id)[:3]
+        cube2_pos = self.get_cube_pose(cube2_id)[:3]
+        distance = np.linalg.norm(np.array(cube1_pos) - np.array(cube2_pos))
+        return distance < threshold
     
     def on_top(self, lower_cube_id, upper_cube_id):
         lower_cube_pos, _ = p.getBasePositionAndOrientation(lower_cube_id)
@@ -196,7 +183,9 @@ class CubesManipulation(Env):
         obs.update(self.robot.get_joint_obs())
 
         obs = np.array(obs["ee_pos"])
-        obs = np.append(obs, self.get_cube_pose(self.cubes[0]))
+        cube1_position = self.get_cube_pose(self.cubes[0])[:3]
+        cube2_position = self.get_cube_pose(self.cubes[1])[:3]
+        obs = np.append(obs, [cube1_position, cube2_position])
         return obs
 
     def reset(self, *, seed: Optional[int] = None, options: Optional[dict] = None):
@@ -209,11 +198,10 @@ class CubesManipulation(Env):
         new_pose[2] += 0.3 # A little bit higher
         new_pose[3:] = rotate_quaternion(new_pose[3:], math.pi/2, [1, 0, 0]) # Reorient the end effector
         new_pose[3:] = rotate_quaternion(new_pose[3:], math.pi/2, [0, 1, 0]) # Reorient the end effector
-        self.robot.move_ee(new_pose, self.control_method)
-        self.robot.open_gripper()
+        self.robot.move_ee(new_pose, 'end')
+        self.robot.close_gripper()
         self.wait_simulation_steps(120)
 
-        self.episode_steps = 0
         return self.get_observation(), {}
 
     def close(self):
@@ -229,8 +217,10 @@ class CubesManipulation(Env):
         for id in self.cubes:
             p.removeBody(id)
         self.cubes = []
-        self.create_cube(0.0, -0.1, 0.1)
-        self.create_cube(0.0, -0.2, 0.1, [1,0,0,1])
+        coors = [random.uniform(-0.3, -0.1) + (0.4 if random.random() > 0.5 else 0) for _ in range(4)]
+
+        self.create_cube(coors[0], coors[1], 0.2)
+        self.create_cube(coors[2], coors[3], 0.2, [1,0,0,1]) 
         #self.create_cube(0.1, -0.1, 0.1, [0,0,1,1])
         #self.create_cube(0.1, -0.2, 0.1, [0,1,0,1])
 
@@ -239,9 +229,3 @@ class CubesManipulation(Env):
         pose = position + orientation
         return pose
     
-# Register the environment
-register(
-    id='ur5/cubes_test2',
-    entry_point='ur5.envs.env_cubes_test2:CubesManipulation',
-    max_episode_steps=50,
-)

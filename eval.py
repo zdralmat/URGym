@@ -25,8 +25,8 @@ from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.callbacks import CheckpointCallback
 
 import gymnasium as gym
-import ur5.envs
-from ur5.algos import ActionSAC
+import urgym.envs
+from urgym.algos import ActionSAC
 from stable_baselines3.common.utils import set_random_seed
 
 parser = argparse.ArgumentParser(description='Train an environment with an SB3 algorithm and then render 10 episodes.')
