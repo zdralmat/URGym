@@ -41,6 +41,8 @@ def objective(trial: optuna.Trial):
     model.learn(total_timesteps=n_steps, progress_bar=True)
 
     mean_reward, std_reward = evaluate_policy(model, model.get_env(), n_eval_episodes=10)
+    print()
+    print("Mean reward:", mean_reward)
     
     return mean_reward
 
@@ -48,13 +50,16 @@ parser = argparse.ArgumentParser(description='Search Optuna hyperparameters.')
 parser.add_argument('-e', '--env', type=str, help='environment to test (e.g. CartPole-v1)', required=True)
 parser.add_argument('-t', '--trials', type=int, default=50, help='number of trials')
 parser.add_argument('-n', '--nsteps', type=int, default=50_000, help='number of steps per trial')
+parser.add_argument('-c', '--continue', dest="cont", action='store_true', default=False, help='continue existing study')
 
 args = parser.parse_args()
 
 str_env = args.env
 n_trials = args.trials
 n_steps = args.nsteps
+continue_study = args.cont
 optuna_dir = f"optuna_results/"
+storage_file = f"sqlite:///{optuna_dir}optuna.db"
 
 set_random_seed(42)
 
@@ -62,7 +67,13 @@ set_random_seed(42)
 env = gym.make(str_env, render_mode=None)
 
 # Set up Optuna and start the optimization
-study = optuna.create_study(direction='maximize', study_name=str_env+"_sac")
+if not continue_study: # Delete to overwrite if it exists
+    try:
+        optuna.delete_study(study_name=str_env+"_sac", storage=storage_file)
+    except:
+        pass
+
+study = optuna.create_study(direction='maximize', study_name=str_env+"_sac", storage=storage_file,  load_if_exists=continue_study)
 
 print(f"Searching for the best hyperparameters in {n_trials} trials...")
 study.optimize(objective, n_trials=n_trials)
