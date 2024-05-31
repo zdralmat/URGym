@@ -75,7 +75,7 @@ checkpoint_callback = CheckpointCallback(save_freq=10_000, save_path=f"./checkpo
 model.learn(total_timesteps=int(n_steps), callback=checkpoint_callback, progress_bar=True, tb_log_name=f"{experiment_name}_{str_algo}")
 
 model.save(f"policies/{experiment_name}_{str_algo}_policy.zip")
-model.save_replay_buffer(f"policies/{experiment_name}_{str_algo}_replay_buffer.zip")
+model.save_replay_buffer(f"policies/{experiment_name}_{str_algo}_replay_buffer.pkl")
 
 env.close()
 

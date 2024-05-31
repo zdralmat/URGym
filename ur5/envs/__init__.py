@@ -20,5 +20,5 @@ register(
 register(
     id='ur5/cubes_grasp_joint-v0',
     entry_point='ur5.envs.env_cubes_grasp_joint:CubesGrasp',
-    max_episode_steps=10,
+    max_episode_steps=20,
 )

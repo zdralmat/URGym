@@ -27,6 +27,8 @@ class ActionNN(nn.Module):
         self.subnet_action_selection = nn.Sequential(
             nn.Linear(features_dim, n_nodes),
             nn.ReLU(),
+            nn.Linear(n_nodes, n_nodes),
+            nn.ReLU(),
             nn.Linear(n_nodes, n_actions),
             nn.Softmax(dim=-1)  # To ensure outputs are probabilities summing to 1
         )
@@ -38,6 +40,8 @@ class ActionNN(nn.Module):
             # Add the subnets for each action
             self.subnet_action.extend([nn.Sequential(
                 nn.Linear(features_dim, n_nodes),
+                nn.ReLU(),
+                nn.Linear(n_nodes, n_nodes),
                 nn.ReLU(),
                 nn.Linear(n_nodes, action_layers[i][0]),
                 action_layers[i][1]() 

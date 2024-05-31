@@ -116,7 +116,7 @@ class CubesGrasp(Env):
             self.robot.move_ee(joint_states + action[2:-1], self.control_method)
             # Reward proportional to the distance to the target
             distance = self.distance_to_target(self.target_id)
-            distance_reward = geometric_distance_reward(distance, 0.1, 0.5)
+            distance_reward = geometric_distance_reward(distance, 0.2, 0.5)
             reward += distance_reward
         else:
             # Open/close the gripper
