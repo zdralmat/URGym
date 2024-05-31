@@ -4,6 +4,7 @@ logs/
 # Policy and checkpoint files resulting from training processes
 policies/
 checkpoints/
+optuna_results/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

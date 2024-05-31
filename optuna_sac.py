@@ -1,12 +1,13 @@
-import optuna
-import gymnasium as gym
-import json
 import argparse
+import os
+import json
+
+import gymnasium as gym
+import optuna
 
 from stable_baselines3 import SAC
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.utils import set_random_seed
-
 import ur5.envs
 
 # Define the SAC hyperparameters to optimize
@@ -53,6 +54,7 @@ args = parser.parse_args()
 str_env = args.env
 n_trials = args.trials
 n_steps = args.nsteps
+optuna_dir = f"optuna_results/"
 
 set_random_seed(42)
 
@@ -65,15 +67,19 @@ study = optuna.create_study(direction='maximize', study_name=str_env+"_sac")
 print(f"Searching for the best hyperparameters in {n_trials} trials...")
 study.optimize(objective, n_trials=n_trials)
 
-# visualize the results
+if not os.path.exists(optuna_dir):
+    os.makedirs(optuna_dir)
+    os.makedirs(optuna_dir+"/figures")
+
+# Generate the figures of the results
 fig = optuna.visualization.plot_optimization_history(study)
-fig.show()
+fig.write_html(f"{optuna_dir}/figures/optimization_history_sac.html")
 fig = optuna.visualization.plot_contour(study)
-fig.show()
+fig.write_html(f"{optuna_dir}/figures/contour_sac.html")
 fig = optuna.visualization.plot_slice(study)
-fig.show()
+fig.write_html(f"{optuna_dir}/figures/slice_sac.html")
 fig = optuna.visualization.plot_param_importances(study)
-fig.show()
+fig.write_html(f"{optuna_dir}/figures/param_importances_sac.html")
 
 # print the result on the screen
 best_trial = study.best_trial
@@ -84,6 +90,6 @@ best_trial_params = json.dumps(best_trial.params, sort_keys=True, indent=4)
 print(best_trial_params)
 
 # save the data in a JSON file
-best_trial_file = open("optuna_best_trial_sac.json", "w")
+best_trial_file = open(f"{optuna_dir}/optuna_best_trial_sac.json", "w")
 best_trial_file.write(best_trial_params)
 best_trial_file.close()
