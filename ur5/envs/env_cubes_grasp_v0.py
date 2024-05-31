@@ -113,14 +113,15 @@ class CubesGrasp(Env):
         if action_selected == 0:
             # Move the end effector
             joint_states = self.robot.get_joint_states()
-            self.robot.move_ee(joint_states + action[2:-1], self.control_method)
-            # Reward proportional to the distance to the target
-            distance = self.distance_to_target(self.target_id)
-            distance_reward = geometric_distance_reward(distance, 0.2, 0.5)
-            reward += distance_reward
-        else:
+            self.robot.move_ee(joint_states + action1_actions, self.control_method)
+            # Reward proportional to the distance to the target if in search phase
+            if self.status == 'search':
+                distance = self.distance_to_target(self.target_id)
+                distance_reward = geometric_distance_reward(distance, 0.2, 0.5)
+                reward += distance_reward
+        elif action_selected == 1:
             # Open/close the gripper
-            if action[-1] < 0.5:
+            if action2_actions < 0.5:
                 self.robot.open_gripper()
             else:
                 self.robot.close_gripper() 
@@ -269,7 +270,7 @@ class CubesGrasp(Env):
         self.robot.move_ee(new_pose, 'end')
         self.wait_simulation_steps(120)"""
 
-        self.status = '' # '', 'grasped', 'raised'
+        self.status = 'search' # 'search', 'grasped', 'raised'
 
         return self.get_observation(), {}
 

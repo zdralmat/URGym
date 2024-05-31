@@ -24,7 +24,7 @@ from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.callbacks import CheckpointCallback
 
-from ur5.envs.env_box import BoxManipulation
+from ur5.envs.env_box_v0 import BoxManipulation
 from ur5.envs.env_cubes_test2 import CubesManipulation
 import gymnasium as gym
 

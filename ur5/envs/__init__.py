@@ -2,23 +2,23 @@ from gymnasium.envs.registration import register
 
 # Register the environment
 register(
-    id='ur5/box-v0',
-    entry_point='ur5.envs.env_box:BoxManipulation',
+    id='UR5Gym/Box-v0',
+    entry_point='ur5.envs.env_box_v0:BoxManipulation',
     max_episode_steps=200,
     kwargs=dict(button_touch_mode='any')
 )
 
 
 register(
-    id='ur5/cubes_push-v0',
-    entry_point='ur5.envs.env_cubes_push_joint:CubesPush',
+    id='UR5Gym/CubesPush-v0',
+    entry_point='ur5.envs.env_cubes_push_v0:CubesPush',
     max_episode_steps=50,
 )
 
 
 # Register the environment
 register(
-    id='ur5/cubes_grasp_joint-v0',
-    entry_point='ur5.envs.env_cubes_grasp_joint:CubesGrasp',
+    id='UR5Gym/CubesGrasp-v0',
+    entry_point='ur5.envs.env_cubes_grasp_v0:CubesGrasp',
     max_episode_steps=20,
 )
