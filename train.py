@@ -18,6 +18,7 @@ __license__ = "GPLv3"
 
 import argparse
 import sys
+import json
 
 from stable_baselines3 import PPO, DQN, SAC, A2C, DDPG, TD3
 from stable_baselines3.common.evaluation import evaluate_policy
@@ -34,11 +35,11 @@ parser.add_argument('-e', '--env', type=str, default="CartPole-v1", help='enviro
 parser.add_argument('-a', '--algo', type=str, default='PPO',
 					help='algorithm to test from SB3, such as PPO (default), SAC, DQN... using default hyperparameters')
 parser.add_argument('-n', '--nsteps', type=int, default=100_000, help='number of steps to train')
-parser.add_argument('-r', '--recvideo', action="store_true", help='record and store video in a \"video\" directory, instead of using the screen')
-parser.add_argument('-t', '--tblog', action="store_true", help='generate tensorboard logs in the \"logs\" directory')
+parser.add_argument('-y', '--hyperparams', type=str, default=None, help='path to json file with hyperparameters to use in the algorithm instead of the default ones')
 parser.add_argument('--name', type=str, default="model", help='name of this experiment (for logs and policies)')
 parser.add_argument('-v', '--visualize', action="store_true", help='visualize the training with render_mode=\'human\'')
-parser.add_argument('-p', '--policy', type=str, default=None, help='policy to load for evaluation, it will also read the replay buffer')
+parser.add_argument('-t', '--tblog', action="store_true", help='generate tensorboard logs in the \"logs\" directory')
+parser.add_argument('-p', '--policy', type=str, default=None, help='policy to load to continue training, it will also read the replay buffer')
 
 args = parser.parse_args()
 
@@ -46,11 +47,11 @@ str_env = args.env
 str_algo = args.algo.upper()
 algo = getattr(sys.modules[__name__], str_algo) # Obtains the classname based on the string
 n_steps = args.nsteps
-recvideo = args.recvideo
 tblog_dir = None if args.tblog==False else "./logs"
 experiment_name = args.name
 render_mode = 'human' if args.visualize else None
 policy_file = args.policy
+hyperparams = json.load(open(args.hyperparams)) if args.hyperparams else {}
 
 set_random_seed(42)
 
@@ -60,13 +61,13 @@ env = gym.make(str_env, render_mode=render_mode)
 print(f"Training for {n_steps} steps with {str_algo}...")
 
 if policy_file:
-	model = algo.load(f"{policy_file}", env=env, tensorboard_log=tblog_dir, verbose=True)
+	model = algo.load(f"{policy_file}", env=env, tensorboard_log=tblog_dir, verbose=True, **hyperparams)
 	replay_buffer_file = policy_file.removesuffix("_policy.zip") + "_replay_buffer.pkl"
 	model.load_replay_buffer(replay_buffer_file)
 	reset_tblog = False
 else:
 	# Instantiate the agent
-	model = algo('MlpPolicy', env=env, tensorboard_log=tblog_dir, verbose=True)    
+	model = algo('MlpPolicy', env=env, tensorboard_log=tblog_dir, verbose=True, **hyperparams)    
 	reset_tblog = True
 
 # Train the agent and display a progress bar
