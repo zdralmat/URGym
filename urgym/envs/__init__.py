@@ -1,6 +1,5 @@
 from gymnasium.envs.registration import register
 
-# Register the environment
 register(
     id='URGym/Box-v0',
     entry_point='urgym.envs.env_box_v0:BoxManipulation',
@@ -16,9 +15,14 @@ register(
 )
 
 
-# Register the environment
 register(
     id='URGym/CubesGrasp-v0',
     entry_point='urgym.envs.env_cubes_grasp_v0:CubesGrasp',
+    max_episode_steps=20,
+)
+
+register(
+    id='URGym/CubesGrasp-v1',
+    entry_point='urgym.envs.env_cubes_grasp_v1:CubesGrasp',
     max_episode_steps=20,
 )

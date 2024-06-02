@@ -35,7 +35,7 @@ def objective(trial: optuna.Trial):
 
     policy_kwargs = dict(net_arch=[net_arch_nodes, net_arch_nodes])
 
-    model = SAC('MlpPolicy', env, learning_starts=1000, gamma=gamma, tau=tau, learning_rate=learning_rate,
+    model = SAC('MlpPolicy', env, verbose=True, learning_starts=1000, gamma=gamma, tau=tau, learning_rate=learning_rate,
                 batch_size=batch_size, gradient_steps=gradient_steps, use_sde=use_sde, policy_kwargs=policy_kwargs)    
 
     print(f"Trial {trial.number} with hyperparameters: {trial.params}")
@@ -74,15 +74,15 @@ def create_study_dir(optuna_dir, study_dir):
 parser = argparse.ArgumentParser(description='Search Optuna hyperparameters.')
 parser.add_argument('-e', '--env', type=str, help='environment to test (e.g. CartPole-v1)', required=True)
 parser.add_argument('-t', '--trials', type=int, default=50, help='number of trials')
-parser.add_argument('-s', '--steps', type=int, default=50_000, help='number of steps per trial')
-parser.add_argument('-n', '--name', type=str, help='name of the study')
+parser.add_argument('-n', '--nsteps', type=int, default=50_000, help='number of steps per trial')
+parser.add_argument('-m', '--name', type=str, help='name of the study')
 parser.add_argument('-c', '--continue', dest="cont", action='store_true', default=False, help='continue existing study')
 
 args = parser.parse_args()
 
 str_env = args.env
 n_trials = args.trials
-n_steps = args.steps
+n_steps = args.nsteps
 continue_study = args.cont
 study_name = args.name if args.name else str_env+"_sac"
 optuna_dir = f"optuna_results/"
