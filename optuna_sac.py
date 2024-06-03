@@ -42,6 +42,7 @@ def objective(trial: optuna.Trial):
 
     try:
         model.learn(total_timesteps=n_steps, progress_bar=True)
+        model.save(f"{full_study_dir_path}/models/trial_{trial.number}.zip")
         print()
         print("Evaluating the model...")
         mean_reward, std_reward = evaluate_policy(model, model.get_env(), n_eval_episodes=10)
@@ -69,6 +70,7 @@ def create_study_dir(optuna_dir, study_dir):
     # Create the second level directory
     os.makedirs(full_study_dir_path)
     print(f"Created study directory: {full_study_dir_path}")
+    os.makedirs(full_study_dir_path + "/models")
 
 
 parser = argparse.ArgumentParser(description='Search Optuna hyperparameters.')
@@ -87,6 +89,7 @@ continue_study = args.cont
 study_name = args.name if args.name else str_env+"_sac"
 optuna_dir = f"optuna_results/"
 study_dir = f"{study_name}/"
+full_study_dir_path = os.path.join(optuna_dir, study_dir)
 storage_file = f"sqlite:///{optuna_dir}optuna.db"
 
 set_random_seed(42)
@@ -101,16 +104,15 @@ if not continue_study: # Delete to overwrite if it exists
     except:
         pass
 
+# Create the study directory
+create_study_dir(optuna_dir, study_dir)
+
 study = optuna.create_study(direction='maximize', study_name=study_name, storage=storage_file, load_if_exists=continue_study)
 
 print(f"Searching for the best hyperparameters in {n_trials} trials...")
 study.optimize(objective, n_trials=n_trials)
 
-# Create the study directory
-create_study_dir(optuna_dir, study_dir)
-
 # Generate the figures of the results
-full_study_dir_path = os.path.join(optuna_dir, study_dir)
 fig = optuna.visualization.plot_optimization_history(study)
 fig.write_html(f"{full_study_dir_path}/optimization_history_sac.html")
 fig = optuna.visualization.plot_contour(study)

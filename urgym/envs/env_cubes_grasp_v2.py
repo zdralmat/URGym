@@ -92,6 +92,18 @@ class CubesGrasp(Env):
         for _ in range(sim_steps):
             self.step_simulation()
 
+    def wait_until_stable(self, sim_steps=240):
+        pos = self.robot.get_ee_pose()
+        for _ in range(sim_steps):
+            self.step_simulation()
+            new_pos = self.robot.get_ee_pose()
+            if np.sum(np.abs(np.array(pos)-np.array(new_pos))) < 1e-3:
+                return True
+            pos = new_pos
+        print("Warning: The simulation did not stabilize")
+        return False
+        
+
     def step(self, action):
         """
         action: (x, y, z, roll, pitch, yaw, gripper_opening_length) for End Effector Position Control
@@ -101,39 +113,38 @@ class CubesGrasp(Env):
         """
         reward = 0
         
-        action1_prob = action[0]
-        action2_prob = action[1]
+        action_move_prob = action[0]
+        action_gripper_prob = action[1]
 
-        action1_actions = action[2:-1]
-        action2_actions = action[-1]
-        action1_quaternion = action1_actions[3:7]
-        action1_quaternion = normalize_quaternion(*action1_quaternion)
-        action1_actions[3:7] = action1_quaternion
+        action_move_actions = action[2:-1]
+        action_gripper_actions = action[-1]
+        action_move_quaternion = action_move_actions[3:7]
+        action_move_quaternion = normalize_quaternion(*action_move_quaternion)
+        action_move_actions[3:7] = action_move_quaternion
 
-        action_selected = random.choices([0, 1], weights=[action1_prob, action2_prob], k=1)[0]
+        action_selected = random.choices([0, 1], weights=[action_move_prob, action_gripper_prob], k=1)[0]
 
         if action_selected == 0:
             # Move the end effector and close
-            self.robot.move_ee(action1_actions, self.control_method)
-            self.wait_simulation_steps(120)
+            self.robot.move_ee(action_move_actions, self.control_method)
+            self.wait_until_stable()
+            # if not self.wait_until_stable():
+            #     reward -= 1
+            # pos = self.robot.get_ee_pose()
+            # diff_pos = np.sum(np.abs(action1_actions[:3]-pos[:3]))
+            # diff_quat = np.sum(np.abs(action1_actions[3:]-pos[3:]))
+            #reward -= (diff_pos + diff_quat) / 10 # Penalize non reachable positions
+            distance = self.distance_to_target(self.target_id)
+            distance_reward = geometric_distance_reward(distance, 0.5, 2) / 4
+            reward += distance_reward
         elif action_selected == 1:
             # Open/close the gripper
-            if action2_actions < 0.5:
-                if self.get_gripper_opening_length() < 0.8: # If not already opened
-                    self.robot.open_gripper()
-                    self.wait_simulation_steps(60)
-            elif self.get_gripper_opening_length() > 0.2: # If not already closed
+            if action_gripper_actions < 0.5:
+                self.robot.open_gripper()
+                self.wait_until_stable()
+            else:
                 self.robot.close_gripper() 
-                self.wait_simulation_steps(60)
-                # When closing, reward proportional to the distance to the target if in search phase
-                if self.status == 'search':
-                    distance = self.distance_to_target(self.target_id)
-                    if distance > 0.5:
-                        distance_reward = 0
-                    else:
-                        distance_reward = geometric_distance_reward(distance, 0.5, 10)
-                    reward += distance_reward * 2
-
+                self.wait_until_stable()
 
         reward += self.update_reward()
         
@@ -274,7 +285,7 @@ class CubesGrasp(Env):
         self.robot.open_gripper()"""
 
         self.robot.move_ee(self.robot.get_ee_pose(), 'end')
-        self.wait_simulation_steps(120)
+        self.wait_until_stable()
 
         self.status = 'search' # 'search', 'grasped', 'raised'
 
