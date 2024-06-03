@@ -9,7 +9,7 @@ from gymnasium.spaces import Box
 
 import pybullet as p
 import pybullet_data
-from urgym.utilities import YCBModels, Camera, rotate_quaternion, geometric_distance_reward
+from urgym.utilities import YCBModels, Camera, rotate_quaternion, geometric_distance_reward, z_alignment_distance
 from urgym.robot import UR5Robotiq85
 import random
 
@@ -121,8 +121,13 @@ class CubesGrasp(Env):
                 # When closing, reward proportional to the distance to the target if in search phase
                 if self.status == 'search':
                     distance = self.distance_to_target(self.target_id)
-                    distance_reward = geometric_distance_reward(distance, 1.0, 2.0)
+                    distance_reward = geometric_distance_reward(distance, 0.2, 2.0)
                     reward += distance_reward / 10
+
+                    # Vertical alignment reward
+                    alignment_reward = z_alignment_distance(*action1_actions[3:7])
+                    alignment_reward = geometric_distance_reward(alignment_reward, 0.1, 0.5)
+                    reward += alignment_reward / 10
                 self.robot.close_gripper() 
 
         self.wait_simulation_steps(120)

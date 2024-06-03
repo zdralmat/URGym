@@ -26,3 +26,9 @@ register(
     entry_point='urgym.envs.env_cubes_grasp_v1:CubesGrasp',
     max_episode_steps=20,
 )
+
+register(
+    id='URGym/CubesGrasp-v2',
+    entry_point='urgym.envs.env_cubes_grasp_v2:CubesGrasp',
+    max_episode_steps=20,
+)

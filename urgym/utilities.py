@@ -6,6 +6,7 @@ import torch
 import cv2
 from scipy import ndimage
 import numpy as np
+import math
 
 
 class Models:
@@ -160,8 +161,8 @@ def quaternion_multiply(quat1, quat2):
     """
 
     # Get the real and imaginary parts of the quaternions
-    w1, x1, y1, z1 = quat1
-    w2, x2, y2, z2 = quat2
+    x1, y1, z1, w1 = quat1
+    x2, y2, z2, w2 = quat2
 
     # Calculate the real part of the result
     w = w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2
@@ -170,7 +171,7 @@ def quaternion_multiply(quat1, quat2):
     y = w1 * y2 + y1 * w2 + z1 * x2 - x1 * z2
     z = w1 * z2 + z1 * w2 + x1 * y2 - y1 * x2
 
-    return w, x, y, z
+    return x, y, z, w
     
 
 def geometric_distance_reward(value: float, threshold_sign: float, threshold_max: float) -> float:
@@ -203,3 +204,23 @@ def print_link_names_and_indices(id):
         link_info = p.getJointInfo(id, i)
         link_name = link_info[12].decode('utf-8')  # Link name is at index 12
         print(f"Link Index: {i}, Link Name: {link_name}")
+
+
+def is_pointing_downwards(qx, qy, qz, qw, threshold=1e-1):    
+    return z_alignment_distance(qx, qy, qz, qw) <= threshold
+
+
+def z_alignment_distance(qx, qy, qz, qw):
+    reference_pitch = math.pi/2  # ~pi/2
+    
+    # Convert input quaternion to Euler angles
+    input_roll, input_pitch, input_yaw = p.getEulerFromQuaternion([qx, qy, qz, qw])
+
+    # Calculate the absolute difference between input_pitch and reference_pitch
+    pitch_difference = abs(input_pitch - reference_pitch)
+
+    # Scale the pitch_difference to the range [0, 1]
+    scaled_difference = pitch_difference / math.pi
+
+    # Return the scaled difference
+    return scaled_difference
