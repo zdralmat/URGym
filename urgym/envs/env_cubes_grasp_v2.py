@@ -115,11 +115,16 @@ class CubesGrasp(Env):
         if action_selected == 0:
             # Move the end effector and close
             self.robot.move_ee(action1_actions, self.control_method)
+            self.wait_simulation_steps(120)
         elif action_selected == 1:
             # Open/close the gripper
             if action2_actions < 0.5:
-                self.robot.open_gripper()
-            else:
+                if self.get_gripper_opening_length() < 0.8: # If not already opened
+                    self.robot.open_gripper()
+                    self.wait_simulation_steps(60)
+            elif self.get_gripper_opening_length() > 0.2: # If not already closed
+                self.robot.close_gripper() 
+                self.wait_simulation_steps(60)
                 # When closing, reward proportional to the distance to the target if in search phase
                 if self.status == 'search':
                     distance = self.distance_to_target(self.target_id)
@@ -127,19 +132,8 @@ class CubesGrasp(Env):
                         distance_reward = 0
                     else:
                         distance_reward = geometric_distance_reward(distance, 0.5, 10)
-                    reward += distance_reward
+                    reward += distance_reward * 2
 
-                    # Vertical alignment reward
-                    alignment_distance = z_alignment_distance(*action1_actions[3:7])
-                    if alignment_distance > 1.0:
-                        alignment_reward = 0
-                    else:
-                        alignment_reward = geometric_distance_reward(alignment_distance, 1.0, 10)
-                    reward += alignment_reward
-                    #print(f"Distance reward: {distance_reward}, Alignment reward: {alignment_reward}")
-                self.robot.close_gripper() 
-
-        self.wait_simulation_steps(120)
 
         reward += self.update_reward()
         
@@ -152,6 +146,15 @@ class CubesGrasp(Env):
                 print("Grasped!")
                 self.status = 'grasped'
                 reward += 5
+                # Vertical alignment reward
+                quaternion = self.robot.get_ee_pose()[3:]       
+                alignment_distance = z_alignment_distance(*quaternion)
+                if alignment_distance > 1.0:
+                    alignment_reward = 0
+                else:
+                    alignment_reward = geometric_distance_reward(alignment_distance, 1.0, 10)
+                reward += alignment_reward * 2
+                #print(f"Distance reward: {distance_reward}, Alignment reward: {alignment_reward}")
             if self.status != 'raised' and self.object_raised(self.target_id): # Raised for first time
                 print("Raised!")
                 self.status = 'raised'
