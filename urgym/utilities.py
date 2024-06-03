@@ -173,6 +173,21 @@ def quaternion_multiply(quat1, quat2):
 
     return x, y, z, w
     
+def normalize_quaternion(qx, qy, qz, qw):
+    # Calculate the norm of the quaternion
+    norm = np.sqrt(qx**2 + qy**2 + qz**2 + qw**2)
+    
+    # If the norm is 0, we cannot normalize the quaternion, return a default valid quaternion
+    if norm == 0:
+        return 0.0, 0.0, 0.0, 1.0
+    
+    # Normalize the quaternion
+    qx /= norm
+    qy /= norm
+    qz /= norm
+    qw /= norm
+    
+    return qx, qy, qz, qw
 
 def geometric_distance_reward(value: float, threshold_sign: float, threshold_max: float) -> float:
     """Returns a geometric reward which is positive from 0 to +1 in the range [0, threshold_sign] and negative for values larger than
@@ -211,16 +226,16 @@ def is_pointing_downwards(qx, qy, qz, qw, threshold=1e-1):
 
 
 def z_alignment_distance(qx, qy, qz, qw):
-    reference_pitch = math.pi/2  # ~pi/2
+    # If aligned in z direction downwards:
+    # qx = -qz and qy = qw
+
+    # These differences should be close to zero if the object is vertically downwards
+    diff1 = abs(qx + qz) 
+    diff2 = abs(qy - qw) 
+
+    scaled_difference = (diff1 + diff2) / 4 # Always in the range from 0 to 1
+
+    #print(f"qx: {qx}, qy: {qy}, qz: {qz}, qw: {qw}")
     
-    # Convert input quaternion to Euler angles
-    input_roll, input_pitch, input_yaw = p.getEulerFromQuaternion([qx, qy, qz, qw])
-
-    # Calculate the absolute difference between input_pitch and reference_pitch
-    pitch_difference = abs(input_pitch - reference_pitch)
-
-    # Scale the pitch_difference to the range [0, 1]
-    scaled_difference = pitch_difference / math.pi
-
     # Return the scaled difference
     return scaled_difference

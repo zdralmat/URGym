@@ -98,6 +98,11 @@ class BoxManipulation(Env):
         if self.vis:
             time.sleep(self.SIMULATION_STEP_DELAY)
 
+
+    def test(self):
+        self.robot.move_ee(self.read_debug_parameter()[:6], "joint")
+        self.step_simulation()
+
     def read_debug_parameter(self):
         # read the value of task parameter
         x = p.readUserDebugParameter(self.xin)

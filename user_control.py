@@ -8,6 +8,18 @@ import time
 import math
 import pybullet as p
 
+def test_demo():
+    env = BoxManipulation()
+    # Show right and left menus
+    p.configureDebugVisualizer(p.COV_ENABLE_GUI,1)
+
+    env.reset()
+    # env.SIMULATION_STEP_DELAY = 0
+    while True:
+        x, y, z, roll, pitch, yaw, gripper_opening_length = env.read_debug_parameter()
+        qx,qy,qz,qw = p.getQuaternionFromEuler((roll, pitch, yaw))
+        env.test()
+        print(env.robot.get_ee_pose()[3:])
 
 def user_control_demo():
     env = BoxManipulation()
@@ -26,4 +38,5 @@ def user_control_demo():
 
 
 if __name__ == '__main__':
-    user_control_demo()
+    # user_control_demo()
+    test_demo()

@@ -9,7 +9,7 @@ from gymnasium.spaces import Box
 
 import pybullet as p
 import pybullet_data
-from urgym.utilities import YCBModels, Camera, rotate_quaternion, geometric_distance_reward, z_alignment_distance
+from urgym.utilities import YCBModels, Camera, rotate_quaternion, geometric_distance_reward, z_alignment_distance, normalize_quaternion
 from urgym.robot import UR5Robotiq85
 import random
 
@@ -64,10 +64,9 @@ class CubesGrasp(Env):
         # Set observation and action spaces
         # Observations: the end-effector position and quaternion (x, y, z, qx, qy, qz, qw) and gripper opening length in[0,1]
         # And the target cube position and quaternion (x, y, z, qx, qy, qz, qw)
-        self.observation_space = Box(low=np.array([-1.0]*3 + [-math.pi]*4 + [0] + [-1.0]*3 + [-math.pi]*4), high=np.array([1.0]*3 + [math.pi]*4 + [1] + [1.0]*3 + [math.pi]*4), dtype=np.float64)
+        self.observation_space = Box(low=np.array([-1.0]*3 + [-1]*4 + [0] + [-1.0]*3 + [-1.0]*4), high=np.array([1.0]*3 + [1.0]*4 + [1] + [1.0]*3 + [1.0]*4), dtype=np.float64)
         # Actions: prob1,prob2, end-effector position and quaternion, gripper action (open/close)
-        self.action_space = Box(low=np.array([0]*2 + [-1]*3 + [-math.pi]*4 + [0]), high=np.array([1]*2 + [+1]*3 + [+math.pi]*4 + [1]), dtype=np.float32)
-
+        self.action_space = Box(low=np.array([0]*2 + [-1]*3 + [-1]*4 + [0]), high=np.array([1]*2 + [+1]*3 + [+1]*4 + [1]), dtype=np.float32)
 
     def step_simulation(self):
         """
@@ -107,6 +106,9 @@ class CubesGrasp(Env):
 
         action1_actions = action[2:-1]
         action2_actions = action[-1]
+        action1_quaternion = action1_actions[3:7]
+        action1_quaternion = normalize_quaternion(*action1_quaternion)
+        action1_actions[3:7] = action1_quaternion
 
         action_selected = random.choices([0, 1], weights=[action1_prob, action2_prob], k=1)[0]
 
@@ -121,13 +123,20 @@ class CubesGrasp(Env):
                 # When closing, reward proportional to the distance to the target if in search phase
                 if self.status == 'search':
                     distance = self.distance_to_target(self.target_id)
-                    distance_reward = geometric_distance_reward(distance, 0.2, 2.0)
-                    reward += distance_reward / 10
+                    if distance > 0.5:
+                        distance_reward = 0
+                    else:
+                        distance_reward = geometric_distance_reward(distance, 0.5, 10)
+                    reward += distance_reward
 
                     # Vertical alignment reward
-                    alignment_reward = z_alignment_distance(*action1_actions[3:7])
-                    alignment_reward = geometric_distance_reward(alignment_reward, 0.1, 0.5)
-                    reward += alignment_reward / 10
+                    alignment_distance = z_alignment_distance(*action1_actions[3:7])
+                    if alignment_distance > 1.0:
+                        alignment_reward = 0
+                    else:
+                        alignment_reward = geometric_distance_reward(alignment_distance, 1.0, 10)
+                    reward += alignment_reward
+                    #print(f"Distance reward: {distance_reward}, Alignment reward: {alignment_reward}")
                 self.robot.close_gripper() 
 
         self.wait_simulation_steps(120)
@@ -253,14 +262,15 @@ class CubesGrasp(Env):
         #print_link_names_and_indices(self.robot.id)
 
         # Position the end effector above the cube
-        new_pose = list(self.get_cube_pose(self.target_id))
+        """new_pose = list(self.get_cube_pose(self.target_id))
         new_pose[2] += 0.27 # A little bit higher
         new_pose[1] += 0.01 # A little bit backwards
         new_pose[3:] = [0, -0.707, 0, -0.707] # Reorient the end effector downwards
         new_pose[3:] = rotate_quaternion(new_pose[3:], math.pi/2, [0, 0, 0]) # Rotate the end effector 90 degrees
         self.robot.move_ee(new_pose, 'end')
-        self.robot.open_gripper()
+        self.robot.open_gripper()"""
 
+        self.robot.move_ee(self.robot.get_ee_pose(), 'end')
         self.wait_simulation_steps(120)
 
         self.status = 'search' # 'search', 'grasped', 'raised'
