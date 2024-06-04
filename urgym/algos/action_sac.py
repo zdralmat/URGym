@@ -30,7 +30,8 @@ class ActionNN(nn.Module):
             nn.Linear(n_nodes, n_nodes),
             nn.ReLU(),
             nn.Linear(n_nodes, n_actions),
-            nn.Softmax(dim=-1)  # To ensure outputs are probabilities summing to 1
+            #nn.Softmax(dim=-1)  # To ensure outputs are probabilities summing to 1
+            nn.Tanh() # But SAC requires outputs between -1 and 1, to perform unscaling later
         )
         
         # Subnets specific for each action
@@ -52,15 +53,20 @@ class ActionNN(nn.Module):
         action_probs = self.subnet_action_selection(x)
         
         # Version with deterministic action selection
-        #selected_action = torch.argmax(action_probs, dim=-1)
+        selected_action = torch.argmax(action_probs, dim=-1)
 
+        """
+        # Version with -1 to 1
+        # Scale the tensor to the range 0 to 1
+        scaled_action_probs = (action_probs + 1) / 2
+        
         # Version with stochastic action selection
-        selected_action = torch.multinomial(action_probs, num_samples=1).squeeze(-1)
+        selected_action = torch.multinomial(scaled_action_probs, num_samples=1).squeeze(-1)
         #action_probs = torch.zeros_like(action_probs)
         # SAC expects the output of the NN to be in the range -1 to 1, as it does unscaling later to the origninsal space
         # So -1 will be probability 0, and 1 will be probability 1
         action_probs = torch.full_like(action_probs, -1)
-        action_probs[torch.arange(action_probs.shape[0]), selected_action] = 1
+        action_probs[torch.arange(action_probs.shape[0]), selected_action] = 1"""
 
         # Output values
         output_values_list = []

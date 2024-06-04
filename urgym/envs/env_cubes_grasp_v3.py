@@ -35,7 +35,7 @@ class CubesGrasp(Env):
                         0.1, 5, (320, 320), 40)"""
         self.camera = camera
         # robot = Panda((0, 0.5, 0), (0, 0, math.pi))
-        self.robot = UR5Robotiq85((0, 0.5, 0), (0, 0, 0))
+        self.robot = UR5Robotiq85((0, 0, 0), (0, 0, 0))
 
         # define environment        
         self.physicsClient = p.connect(p.GUI if self.vis else p.DIRECT)
@@ -44,7 +44,7 @@ class CubesGrasp(Env):
         # Hide right and left menus
         p.configureDebugVisualizer(p.COV_ENABLE_GUI,0)
         # Reorient the debug camera
-        p.resetDebugVisualizerCamera(cameraDistance=2, cameraYaw=50, cameraPitch=-25, cameraTargetPosition=[-0.5,+0.5,0])
+        p.resetDebugVisualizerCamera(cameraDistance=2.2, cameraYaw=50, cameraPitch=-25, cameraTargetPosition=[-0.5,+0.5,0])
         self.planeID = p.loadURDF("plane.urdf")
 
         self.robot.load()
@@ -62,10 +62,14 @@ class CubesGrasp(Env):
 
         self.cubes = []
 
+        self.subgoals = {'approached': 0, 'grasped': 0}
+
         # Set observation and action spaces
-        # Observations: the end-effector position and quaternion (x, y, z, qx, qy, qz, qw) and gripper opening length in[0,1]
+        # Observations:
+        # The subgoal achieved status (0 or 1) for two subgoals ('approached', 'grasped')
+        # The end-effector position and quaternion (x, y, z, qx, qy, qz, qw) and gripper opening length in[0,1]
         # And the target cube position and quaternion (x, y, z, qx, qy, qz, qw)
-        self.observation_space = Box(low=np.array([-1.0]*3 + [-1]*4 + [0] + [-1.0]*3 + [-1.0]*4), high=np.array([1.0]*3 + [1.0]*4 + [1] + [1.0]*3 + [1.0]*4), dtype=np.float64)
+        self.observation_space = Box(low=np.array([0]*2 + [-1.0]*3 + [-1]*4 + [0] + [-1.0]*3 + [-1.0]*4), high=np.array([1]*2 + [1.0]*3 + [1.0]*4 + [1] + [1.0]*3 + [1.0]*4), dtype=np.float64)
         # Actions: prob1,prob2, end-effector position and quaternion, gripper action (open/close)
         self.action_space = Box(low=np.array([0]*2 + [-1]*3 + [-1]*4 + [0]), high=np.array([1]*2 + [+1]*3 + [+1]*4 + [1]), dtype=np.float32)
 
@@ -93,7 +97,7 @@ class CubesGrasp(Env):
         for _ in range(sim_steps):
             self.step_simulation()
 
-    def wait_until_stable(self, sim_steps=240):
+    def wait_until_stable(self, sim_steps=480):
         pos = self.robot.get_ee_pose()
         for _ in range(sim_steps):
             self.step_simulation()
@@ -123,25 +127,13 @@ class CubesGrasp(Env):
         action_move_quaternion = normalize_quaternion(*action_move_quaternion)
         action_move_actions[3:7] = action_move_quaternion
 
-        #action_selected = random.choices([0, 1], weights=[action_move_prob, action_gripper_prob], k=1)[0]
-        if random.random() < 0.01:
-            print(action[:2])
-            #traceback.print_stack()
-        action_selected = np.argmax([action_move_prob, action_gripper_prob])
+        action_selected = random.choices([0, 1], weights=[action_move_prob, action_gripper_prob], k=1)[0]
+        #action_selected = np.argmax([action_move_prob, action_gripper_prob])
 
         if action_selected == 0:
             # Move the end effector and close
             self.robot.move_ee(action_move_actions, self.control_method)
             self.wait_until_stable()
-            # if not self.wait_until_stable():
-            #     reward -= 1
-            # pos = self.robot.get_ee_pose()
-            # diff_pos = np.sum(np.abs(action1_actions[:3]-pos[:3]))
-            # diff_quat = np.sum(np.abs(action1_actions[3:]-pos[3:]))
-            #reward -= (diff_pos + diff_quat) / 10 # Penalize non reachable positions
-            distance = self.distance_to_target(self.target_id)
-            distance_reward = geometric_distance_reward(distance, 0.5, 2) / 4
-            reward += distance_reward
         elif action_selected == 1:
             # Open/close the gripper
             if action_gripper_actions < 0.5:
@@ -152,17 +144,23 @@ class CubesGrasp(Env):
                 self.wait_until_stable()
 
         reward += self.update_reward()
-        
         info = {"is_success": False}
         terminated = False
 
-        # Grasp check
-        if self.object_grasped(self.target_id):
-            if self.status != 'grasped': # Grasped for first time
-                print("Grasped!")
-                self.status = 'grasped'
+        if self.subgoals['approached'] == 0:
+            distance = self.distance_to_target(self.target_id)
+            distance_reward = geometric_distance_reward(distance, 0.5, 2) / 4
+            reward += distance_reward
+            if distance < 0.05 and self.get_gripper_opening_length() > 0.50:
+                print("Approached!")
+                self.subgoals['approached'] = 1
                 reward += 5
-                # Vertical alignment reward
+        elif self.subgoals['approached'] == 1 and self.subgoals['grasped'] == 0:
+            if self.object_grasped(self.target_id):
+                print("Grasped!")
+                self.subgoals['grasped'] = 1
+                reward += 5
+                """# Vertical alignment reward
                 quaternion = self.robot.get_ee_pose()[3:]       
                 alignment_distance = z_alignment_distance(*quaternion)
                 if alignment_distance > 1.0:
@@ -170,14 +168,14 @@ class CubesGrasp(Env):
                 else:
                     alignment_reward = geometric_distance_reward(alignment_distance, 1.0, 10)
                 reward += alignment_reward * 2
-                #print(f"Distance reward: {distance_reward}, Alignment reward: {alignment_reward}")
-            if self.status != 'raised' and self.object_raised(self.target_id): # Raised for first time
+                #print(f"Distance reward: {distance_reward}, Alignment reward: {alignment_reward}")"""
+        elif self.subgoals['approached'] == 1 and self.subgoals['grasped'] == 1:
+            if self.object_raised(self.target_id): # Raised for first time
                 print("Raised!")
-                self.status = 'raised'
                 reward += 10
                 terminated = True
                 info["is_success"] = True
-            
+        
         truncated = False # Managed by the environment automatically
 
         reward -= 0.1 # Step penalty
@@ -257,16 +255,18 @@ class CubesGrasp(Env):
         return False
 
     def get_observation(self):
-        obs = dict()
+        obs_robot = dict()
+
         if isinstance(self.camera, Camera):
             rgb, depth, seg = self.camera.shot()
-            obs.update(dict(rgb=rgb, depth=depth, seg=seg))
+            obs_robot.update(dict(rgb=rgb, depth=depth, seg=seg))
         else:
             assert self.camera is None
 
-        obs.update(self.robot.get_joint_obs())
+        obs_robot.update(self.robot.get_joint_obs())
 
-        obs = np.array(obs["ee_pos"])
+        obs = np.array(list(self.subgoals.values()))
+        obs = np.append(obs, obs_robot["ee_pos"])
         obs = np.append(obs, self.get_gripper_opening_length())
         obs = np.append(obs, self.get_cube_pose(self.target_id))
         return obs
@@ -292,7 +292,7 @@ class CubesGrasp(Env):
         self.robot.move_ee(self.robot.get_ee_pose(), 'end')
         self.wait_until_stable()
 
-        self.status = 'search' # 'search', 'grasped', 'raised'
+        self.subgoals = {'approached': 0, 'grasped': 0}
 
         return self.get_observation(), {}
 
@@ -309,8 +309,15 @@ class CubesGrasp(Env):
         for id in self.cubes:
             p.removeBody(id)
         self.cubes = []
-        self.create_cube(0.0, -0.1, 0.1)
-        self.create_cube(0.0, -0.2, 0.1, [1,0,0,1])
+        #self.create_cube(0.0, -0.7, 0.1)
+
+        lower_limit = 0.4
+        upper_limit = 0.8
+        range_choice = random.choice([1, -1])
+        x = range_choice * random.uniform(lower_limit, upper_limit)
+        y = range_choice * random.uniform(lower_limit, upper_limit)
+        self.create_cube(x, y, 0.1)
+        #self.create_cube(0.0, -0.2, 0.1, [1,0,0,1])
         #self.create_cube(0.1, -0.1, 0.1, [0,0,1,1])
         #self.create_cube(0.1, -0.2, 0.1, [0,1,0,1])
 

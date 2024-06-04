@@ -41,7 +41,7 @@ def objective(trial: optuna.Trial):
     print(f"Trial {trial.number} with hyperparameters: {trial.params}")
 
     try:
-        model.learn(total_timesteps=n_steps, progress_bar=True)
+        model.learn(total_timesteps=n_steps, progress_bar=True, log_interval=50)
         model.save(f"{full_study_dir_path}/models/trial_{trial.number}.zip")
         print()
         print("Evaluating the model...")
