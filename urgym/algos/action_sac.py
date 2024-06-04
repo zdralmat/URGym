@@ -1,6 +1,6 @@
 from typing import Any, Dict, Iterator, List, Optional, Tuple, Type, Union
 
-import torch as th
+import torch as torch
 import torch.nn as nn
 
 from gymnasium import spaces
@@ -50,7 +50,17 @@ class ActionNN(nn.Module):
     def forward(self, x):
         # Action selection
         action_probs = self.subnet_action_selection(x)
-        selected_action = th.argmax(action_probs, dim=-1)
+        
+        # Version with deterministic action selection
+        #selected_action = torch.argmax(action_probs, dim=-1)
+
+        # Version with stochastic action selection
+        selected_action = torch.multinomial(action_probs, num_samples=1).squeeze(-1)
+        #action_probs = torch.zeros_like(action_probs)
+        # SAC expects the output of the NN to be in the range -1 to 1, as it does unscaling later to the origninsal space
+        # So -1 will be probability 0, and 1 will be probability 1
+        action_probs = torch.full_like(action_probs, -1)
+        action_probs[torch.arange(action_probs.shape[0]), selected_action] = 1
 
         # Output values
         output_values_list = []
@@ -60,9 +70,9 @@ class ActionNN(nn.Module):
             output_values_list.append(output_values)
 
         # Concatenate action_probs and all output values
-        concatenated_output = th.cat(output_values_list, dim=1)
+        concatenated_output = torch.cat(output_values_list, dim=1)
 
-        return th.cat((action_probs, concatenated_output), dim=1)
+        return torch.cat((action_probs, concatenated_output), dim=1)
     
 
     def _apply_gradient_mask(self, output_values, selected_action, action_index):
@@ -107,11 +117,20 @@ class ActionSACActor(Actor):
         super(ActionSACActor, self).__init__(observation_space, action_space, net_arch, features_extractor, features_dim, activation_fn, 
                                             use_sde, log_std_init, full_std, use_expln, clip_mean, normalize_images)
         
-        n_actions = action_config['n_actions']
+        self.n_actions = action_config['n_actions']
         n_nodes = action_config['n_nodes']
         action_layers = action_config['layers']
-        self.latent_pi = ActionNN(features_dim=features_dim, n_actions=n_actions, action_layers=action_layers, n_nodes=n_nodes).to(self.device)
-    
+        self.latent_pi = ActionNN(features_dim=features_dim, n_actions=self.n_actions, action_layers=action_layers, n_nodes=n_nodes).to(self.device)
+
+
+    def forward(self, obs, deterministic: bool = False) -> torch.Tensor:
+        mean_actions, log_std, kwargs = self.get_action_dist_params(obs)
+        # We don't apply distirbutions to the first two actions, which are the action selection probabilities
+        selection = mean_actions[:, :self.n_actions]
+        # Note: the action is squashed
+        actions = self.action_dist.actions_from_params(mean_actions, log_std, deterministic=deterministic, **kwargs)[:, self.n_actions:]
+        return torch.cat((selection, actions), dim=1)
+   
 class ActionSACPolicy(SACPolicy):
     def __init__(
         self,
@@ -127,7 +146,7 @@ class ActionSACPolicy(SACPolicy):
         features_extractor_class: Type[BaseFeaturesExtractor] = FlattenExtractor,
         features_extractor_kwargs: Optional[Dict[str, Any]] = None,
         normalize_images: bool = True,
-        optimizer_class: Type[th.optim.Optimizer] = th.optim.Adam,
+        optimizer_class: Type[torch.optim.Optimizer] = torch.optim.Adam,
         optimizer_kwargs: Optional[Dict[str, Any]] = None,
         n_critics: int = 2,
         share_features_extractor: bool = False,
@@ -146,6 +165,11 @@ class ActionSACPolicy(SACPolicy):
         actor.mu = nn.Identity()
         return actor
 
+"""    def _predict(self, observation, deterministic: bool = False) -> torch.Tensor:
+        actions = self.actor(observation, deterministic)
+        actions = actions.cpu().numpy().reshape((-1, *self.action_space.shape))  # type: ignore[misc]
+        actions2 = self.unscale_action(actions)
+        return actions"""
 
 class ActionSAC(SAC):
     policy: ActionSACPolicy
@@ -178,7 +202,7 @@ class ActionSAC(SAC):
         policy_kwargs: Optional[Dict[str, Any]] = None,
         verbose: int = 0,
         seed: Optional[int] = None,
-        device: Union[th.device, str] = "auto",
+        device: Union[torch.device, str] = "auto",
         _init_setup_model: bool = True,
     ):        
         

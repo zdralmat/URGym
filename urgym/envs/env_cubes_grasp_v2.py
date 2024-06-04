@@ -12,6 +12,7 @@ import pybullet_data
 from urgym.utilities import YCBModels, Camera, rotate_quaternion, geometric_distance_reward, z_alignment_distance, normalize_quaternion
 from urgym.robot import UR5Robotiq85
 import random
+import traceback
 
 class CubesGrasp(Env):
 
@@ -100,7 +101,7 @@ class CubesGrasp(Env):
             if np.sum(np.abs(np.array(pos)-np.array(new_pos))) < 1e-3:
                 return True
             pos = new_pos
-        print("Warning: The simulation did not stabilize")
+        print("Warning: The robot configuration did not stabilize")
         return False
         
 
@@ -122,7 +123,12 @@ class CubesGrasp(Env):
         action_move_quaternion = normalize_quaternion(*action_move_quaternion)
         action_move_actions[3:7] = action_move_quaternion
 
-        action_selected = random.choices([0, 1], weights=[action_move_prob, action_gripper_prob], k=1)[0]
+
+        #action_selected = random.choices([0, 1], weights=[action_move_prob, action_gripper_prob], k=1)[0]
+        if random.random() < 0.01:
+            print(action[:2])
+            #traceback.print_stack()
+        action_selected = np.argmax([action_move_prob, action_gripper_prob])
 
         if action_selected == 0:
             # Move the end effector and close

@@ -136,7 +136,7 @@ best_trial_params = json.dumps(best_trial.params, sort_keys=True, indent=4)
 print(best_trial_params)
 
 # save the data in a JSON file
-best_trial_file = open(f"{full_study_dir_path}/trial_sac.json", "w")
+best_trial_file = open(f"{full_study_dir_path}/best_trial_sac.json", "w")
 best_trial_file.write(best_trial_params)
 best_trial_file.close()
 
