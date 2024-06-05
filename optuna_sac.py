@@ -53,7 +53,7 @@ def objective(trial: optuna.Trial):
         print(e)
         return float('-inf')
 
-def create_study_dir(optuna_dir, study_dir):
+def create_study_dir(optuna_dir, study_dir, delete_existing=True):
     # Create the first level directory if it does not exist
     if not os.path.exists(optuna_dir):
         os.makedirs(optuna_dir)
@@ -64,13 +64,14 @@ def create_study_dir(optuna_dir, study_dir):
     
     # If the second level directory exists, remove it and its contents
     if os.path.exists(full_study_dir_path):
-        shutil.rmtree(full_study_dir_path)
-        print(f"Removed existing study directory and all its contents: {full_study_dir_path}")
+        if delete_existing:
+            shutil.rmtree(full_study_dir_path)
+            print(f"Removed existing study directory and all its contents: {full_study_dir_path}")
     
-    # Create the second level directory
-    os.makedirs(full_study_dir_path)
-    print(f"Created study directory: {full_study_dir_path}")
-    os.makedirs(full_study_dir_path + "/models")
+            # Create the second level directory
+            os.makedirs(full_study_dir_path)
+            print(f"Created study directory: {full_study_dir_path}")
+            os.makedirs(full_study_dir_path + "/models")
 
 
 parser = argparse.ArgumentParser(description='Search Optuna hyperparameters.')
@@ -104,8 +105,8 @@ if not continue_study: # Delete to overwrite if it exists
     except:
         pass
 
-# Create the study directory
-create_study_dir(optuna_dir, study_dir)
+# Create the study directory if required
+create_study_dir(optuna_dir, study_dir, delete_existing=not continue_study)
 
 study = optuna.create_study(direction='maximize', study_name=study_name, storage=storage_file, load_if_exists=continue_study)
 
@@ -140,5 +141,4 @@ best_trial_file = open(f"{full_study_dir_path}/best_trial_sac.json", "w")
 best_trial_file.write(best_trial_params)
 best_trial_file.close()
 
-env.close
-
+env.close()
