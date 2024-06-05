@@ -52,14 +52,10 @@ class ActionNN(nn.Module):
         # Action selection
         action_probs = self.subnet_action_selection(x)
         
-        # Version with deterministic action selection
-        selected_action = torch.argmax(action_probs, dim=-1)
-
         # Output values
         output_values_list = []
         for i, subnet in enumerate(self.subnet_action):
             output_values = subnet(x)
-            output_values = self._apply_gradient_mask(output_values, selected_action, i)
             output_values_list.append(output_values)
 
         # Concatenate action_probs and all output values
@@ -67,29 +63,6 @@ class ActionNN(nn.Module):
 
         return torch.cat((action_probs, concatenated_output), dim=1)
     
-
-    def _apply_gradient_mask(self, output_values, selected_action, action_index):
-        """
-        Applies a gradient mask to the output values based on the selected action, no doing gradient on the other actions.
-
-        Args:
-            output_values (torch.Tensor): The output values to apply the gradient mask to.
-            selected_action (torch.Tensor): The selected action.
-            action_index (int): The index of the action.
-
-        Returns:
-            torch.Tensor: The output values with the applied gradient mask.
-        """
-        def hook(grad):
-            # Create a mask where gradients are only kept for the selected action
-            mask = (selected_action == action_index).float().unsqueeze(1)
-            return grad * mask
-
-        # Register the hook
-        if output_values.requires_grad:
-            output_values.register_hook(hook)
-        return output_values
-        
 class ActionSACActor(Actor):
     def __init__(
         self,
@@ -114,7 +87,6 @@ class ActionSACActor(Actor):
         n_nodes = action_config['n_nodes']
         action_layers = action_config['layers']
         self.latent_pi = ActionNN(features_dim=features_dim, n_actions=self.n_actions, action_layers=action_layers, n_nodes=n_nodes).to(self.device)
-
 
     def forward(self, obs, deterministic: bool = False) -> torch.Tensor:
         mean_actions, log_std, kwargs = self.get_action_dist_params(obs)
@@ -146,10 +118,6 @@ class ActionSACPolicy(SACPolicy):
         action_config: Optional[Dict[str, Any]] = None,
     ):
         self.action_config = action_config # Here as it is used during the super() call
-        """self.action_config = dict()
-        self.action_config['n_actions'] = 2
-        self.action_config['n_nodes'] = 64
-        self.action_config['layers'] = [(7, nn.Tanh), (1, nn.Sigmoid)]"""
         super(ActionSACPolicy, self).__init__(observation_space, action_space, lr_schedule, net_arch, activation_fn, use_sde, log_std_init, use_expln, clip_mean, features_extractor_class, features_extractor_kwargs, normalize_images, optimizer_class, optimizer_kwargs, n_critics, share_features_extractor)
 
     def make_actor(self, features_extractor: Optional[BaseFeaturesExtractor] = None) -> ActionSACActor:
@@ -157,12 +125,6 @@ class ActionSACPolicy(SACPolicy):
         actor = ActionSACActor(**actor_kwargs, action_config=self.action_config).to(self.device)
         actor.mu = nn.Identity()
         return actor
-
-"""    def _predict(self, observation, deterministic: bool = False) -> torch.Tensor:
-        actions = self.actor(observation, deterministic)
-        actions = actions.cpu().numpy().reshape((-1, *self.action_space.shape))  # type: ignore[misc]
-        actions2 = self.unscale_action(actions)
-        return actions"""
 
 class ActionSAC(SAC):
     policy: ActionSACPolicy

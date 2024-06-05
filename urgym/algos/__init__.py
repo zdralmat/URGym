@@ -1,3 +1,3 @@
-from urgym.algos.action_sac import ActionSAC
-from urgym.algos.action_sac import ActionSACPolicy
+from urgym.algos.action_sac_v2 import ActionSAC
+from urgym.algos.action_sac_v2 import ActionSACPolicy
 

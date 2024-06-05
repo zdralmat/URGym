@@ -82,7 +82,8 @@ else:
 	policy_arch = "MlpPolicy"
 
 if policy_file:
-	model = algo.load(f"{policy_file}", env=env, tensorboard_log=tblog_dir, verbose=True, **hyperparams)
+	# No need to load the hyperparams file as they are already stored in the policy file
+	model = algo.load(f"{policy_file}", env=env, tensorboard_log=tblog_dir, verbose=True)
 	replay_buffer_file = policy_file.removesuffix("_policy.zip") + "_replay_buffer.pkl"
 	model.load_replay_buffer(replay_buffer_file)
 	reset_tblog = False

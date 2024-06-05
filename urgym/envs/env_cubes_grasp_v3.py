@@ -9,7 +9,7 @@ from gymnasium.spaces import Box
 
 import pybullet as p
 import pybullet_data
-from urgym.utilities import YCBModels, Camera, rotate_quaternion, geometric_distance_reward, z_alignment_distance, normalize_quaternion
+from urgym.utilities import YCBModels, Camera, rotate_quaternion, geometric_distance_reward, z_alignment_distance, normalize_quaternion, print_link_names_and_indices
 from urgym.robot import UR5Robotiq85
 import random
 import traceback
@@ -98,16 +98,16 @@ class CubesGrasp(Env):
             self.step_simulation()
 
     def wait_until_stable(self, sim_steps=480):
-        pos = self.robot.get_ee_pose()
+        pos = self.robot.get_joint_obs()['positions']
         for _ in range(sim_steps):
             self.step_simulation()
-            new_pos = self.robot.get_ee_pose()
-            if np.sum(np.abs(np.array(pos)-np.array(new_pos))) < 1e-3:
+            new_pos = self.robot.get_joint_obs()['positions']
+            if np.sum(np.abs(np.array(pos)-np.array(new_pos))) < 5e-3:
                 return True
             pos = new_pos
         print("Warning: The robot configuration did not stabilize")
         return False
-        
+
 
     def step(self, action):
         """
@@ -213,7 +213,8 @@ class CubesGrasp(Env):
         return False
     
     def object_grasped(self, object_id):
-        gripper_link_indices = [11,16]
+        gripper_link_indices_left = [11,12,13]
+        gripper_link_indices_right = [16,17,18]
         # Get contact points between the robot and the object
         contact_points = p.getContactPoints(bodyA=self.robot.id, bodyB=object_id)
         
@@ -223,11 +224,11 @@ class CubesGrasp(Env):
         # Iterate over the contact points to check if the specified fingers are touching the object
         for point in contact_points:
             link_index = point[3]
-            if link_index in gripper_link_indices:
+            if link_index in gripper_link_indices_left or link_index in gripper_link_indices_right:
                 touching_fingers.add(link_index)
                 
-            # If both fingers are touching, return True
-            if len(touching_fingers) == len(gripper_link_indices):
+            # If any part of both fingers are touching simultaneously, return True
+            if any(link_index in touching_fingers for link_index in gripper_link_indices_left) and any(link_index in touching_fingers for link_index in gripper_link_indices_right):
                 return True
         
         # If not all specified fingers are touching, return False
