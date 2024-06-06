@@ -102,7 +102,7 @@ class CubesGrasp(Env):
         for _ in range(sim_steps):
             self.step_simulation()
             new_pos = self.robot.get_joint_obs()['positions']
-            if np.sum(np.abs(np.array(pos)-np.array(new_pos))) < 5e-3:
+            if np.sum(np.abs(np.array(pos)-np.array(new_pos))) < 5e-3: # Threshold based on experience
                 return True
             pos = new_pos
         print("Warning: The robot configuration did not stabilize")
@@ -127,7 +127,10 @@ class CubesGrasp(Env):
         action_move_quaternion = normalize_quaternion(*action_move_quaternion)
         action_move_actions[3:7] = action_move_quaternion
 
-        action_selected = random.choices([0, 1], weights=[action_move_prob, action_gripper_prob], k=1)[0]
+        if action_move_prob + action_gripper_prob == 0: # Avoid the sum to be zero
+            action_selected = random.choices([0, 1], weights=[0.5, 0.5], k=1)[0]
+        else:
+            action_selected = random.choices([0, 1], weights=[action_move_prob, action_gripper_prob], k=1)[0]
         #action_selected = np.argmax([action_move_prob, action_gripper_prob])
 
         if action_selected == 0:
