@@ -9,6 +9,7 @@ from gymnasium.spaces import Box
 
 import pybullet as p
 import pybullet_data
+from torch import GradScaler
 from urgym.utilities import YCBModels, Camera, rotate_quaternion, geometric_distance_reward, z_alignment_distance, normalize_quaternion, print_link_names_and_indices
 from urgym.robot import UR5Robotiq85
 import random
@@ -62,7 +63,7 @@ class CubesGrasp(Env):
 
         self.cubes = []
 
-        self.subgoals = {'approached': 0, 'grasped': 0}
+        self.subgoals_achieved = {'approached': False, 'grasped': False}
 
         # Set observation and action spaces
         # Observations:
@@ -147,37 +148,28 @@ class CubesGrasp(Env):
                 self.wait_until_stable()
 
         reward += self.update_reward()
-        info = {"is_success": False}
+        info = {'is_success': False}
         terminated = False
 
-        if self.subgoals['approached'] == 0:
+        if not self.subgoals_achieved['approached']: # Never approached
             distance = self.distance_to_target(self.target_id)
             distance_reward = geometric_distance_reward(distance, 0.5, 2) / 4
             reward += distance_reward
-            if distance < 0.05 and self.get_gripper_opening_length() > 0.50:
+            if self.object_approached(self.target_id):
                 print("Approached!")
-                self.subgoals['approached'] = 1
+                self.subgoals_achieved['approached'] = True
                 reward += 5
-        elif self.subgoals['approached'] == 1 and self.subgoals['grasped'] == 0:
-            if self.object_grasped(self.target_id):
+        elif self.subgoals_achieved['approached'] and not self.subgoals_achieved['grasped']: 
+            if self.object_grasped(self.target_id): # Grasped for first time
                 print("Grasped!")
-                self.subgoals['grasped'] = 1
+                self.subgoals_achieved['grasped'] = True
                 reward += 5
-                """# Vertical alignment reward
-                quaternion = self.robot.get_ee_pose()[3:]       
-                alignment_distance = z_alignment_distance(*quaternion)
-                if alignment_distance > 1.0:
-                    alignment_reward = 0
-                else:
-                    alignment_reward = geometric_distance_reward(alignment_distance, 1.0, 10)
-                reward += alignment_reward * 2
-                #print(f"Distance reward: {distance_reward}, Alignment reward: {alignment_reward}")"""
-        elif self.subgoals['approached'] == 1 and self.subgoals['grasped'] == 1:
+        elif self.subgoals_achieved['approached'] and self.subgoals_achieved['grasped']: 
             if self.object_raised(self.target_id): # Raised for first time
                 print("Raised!")
                 reward += 10
                 terminated = True
-                info["is_success"] = True
+                info['is_success'] = True
         
         truncated = False # Managed by the environment automatically
 
@@ -208,13 +200,13 @@ class CubesGrasp(Env):
 
         distance = np.linalg.norm(np.array(gripper_center) - np.array(target_pos))
         return distance
-    
-    def object_raised(self, object_id):
-        position,_ = p.getBasePositionAndOrientation(object_id)
-        if self.object_grasped(object_id) and position[2] > self.OBJECT_RAISE_HEIGHT: # If the object is raised
+
+    def object_approached(self, object_id):
+        distance = self.distance_to_target(object_id)
+        if distance < 0.05 and self.get_gripper_opening_length() > 0.50:
             return True
         return False
-    
+      
     def object_grasped(self, object_id):
         gripper_link_indices_left = [11,12,13]
         gripper_link_indices_right = [16,17,18]
@@ -237,6 +229,13 @@ class CubesGrasp(Env):
         # If not all specified fingers are touching, return False
         return False
 
+
+    def object_raised(self, object_id):
+        position,_ = p.getBasePositionAndOrientation(object_id)
+        if self.object_grasped(object_id) and position[2] > self.OBJECT_RAISE_HEIGHT: # If the object is raised
+            return True
+        return False
+    
     def on_top(self, lower_cube_id, upper_cube_id):
         lower_cube_pos, _ = p.getBasePositionAndOrientation(lower_cube_id)
         upper_cube_pos, _ = p.getBasePositionAndOrientation(upper_cube_id)
@@ -269,7 +268,9 @@ class CubesGrasp(Env):
 
         obs_robot.update(self.robot.get_joint_obs())
 
-        obs = np.array(list(self.subgoals.values()))
+        approached = self.object_approached(self.target_id)
+        grasped = self.object_grasped(self.target_id)
+        obs = np.array([int(s) for s in [approached, grasped]]) # Boolean to int (0,1)
         obs = np.append(obs, obs_robot["ee_pos"])
         obs = np.append(obs, self.get_gripper_opening_length())
         obs = np.append(obs, self.get_cube_pose(self.target_id))
@@ -296,7 +297,7 @@ class CubesGrasp(Env):
         self.robot.move_ee(self.robot.get_ee_pose(), 'end')
         self.wait_until_stable()
 
-        self.subgoals = {'approached': 0, 'grasped': 0}
+        self.subgoals_achieved = {'approached': False, 'grasped': False}
 
         return self.get_observation(), {}
 
@@ -315,12 +316,18 @@ class CubesGrasp(Env):
         self.cubes = []
         #self.create_cube(0.0, -0.7, 0.1)
 
-        lower_limit = 0.4
-        upper_limit = 0.8
-        range_choice = random.choice([1, -1])
-        x = range_choice * random.uniform(lower_limit, upper_limit)
-        y = range_choice * random.uniform(lower_limit, upper_limit)
-        self.create_cube(x, y, 0.1)
+        # Generate a cube within the area delimited by a minimum and maximum radius
+        rmin = 0.5
+        rmax = 0.8
+        # Generate a random radius between r1 and r2
+        r = random.uniform(rmin, rmax)
+        # Generate a random angle between 0 and 2*pi
+        theta = random.uniform(0, 2 * math.pi)
+        # Convert polar coordinates to Cartesian coordinates
+        x = r * math.cos(theta)
+        y = r * math.sin(theta)
+        
+        self.create_cube(x, y, 0.1, [1,0,0,1])
         #self.create_cube(0.0, -0.2, 0.1, [1,0,0,1])
         #self.create_cube(0.1, -0.1, 0.1, [0,0,1,1])
         #self.create_cube(0.1, -0.2, 0.1, [0,1,0,1])
