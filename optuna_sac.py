@@ -42,9 +42,11 @@ def objective(trial: optuna.Trial):
                     batch_size=batch_size, gradient_steps=gradient_steps, use_sde=use_sde, policy_kwargs=policy_kwargs)    
     else:
         print("Using ActionSAC...")
+        action_sizes = [6, 1]
+        n_actions = len(action_sizes)
         policy_kwargs = dict(
             net_arch=dict(pi=[env.action_space.shape[0]], qf=[net_arch_nodes, net_arch_nodes]),
-            action_config=dict(n_actions=2, n_nodes=net_arch_nodes, layers=[(7, nn.Tanh), (1, nn.Tanh)]),
+            action_config=dict(n_actions=n_actions, n_nodes=net_arch_nodes, layers=[(action_sizes[0], nn.Tanh), (action_sizes[1], nn.Tanh)]),
         )        
         model = ActionSAC(ActionSACPolicy, env, verbose=True, learning_starts=1000, gamma=gamma, tau=tau, learning_rate=learning_rate,
                     batch_size=batch_size, gradient_steps=gradient_steps, use_sde=use_sde, policy_kwargs=policy_kwargs)    
@@ -78,11 +80,11 @@ def create_study_dir(optuna_dir, study_dir, delete_existing=True):
         if delete_existing:
             shutil.rmtree(full_study_dir_path)
             print(f"Removed existing study directory and all its contents: {full_study_dir_path}")
-    
-            # Create the second level directory
-            os.makedirs(full_study_dir_path)
-            print(f"Created study directory: {full_study_dir_path}")
-            os.makedirs(full_study_dir_path + "/models")
+
+    # Create the second level directory if required
+    os.makedirs(full_study_dir_path, exist_ok=True)
+    print(f"Created study directory: {full_study_dir_path}")
+    os.makedirs(os.path.join(full_study_dir_path, "models"), exist_ok=True)
 
 def get_best_trial(storage_file, study_name):
     # Load the study

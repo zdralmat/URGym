@@ -49,7 +49,7 @@ class CubesGrasp(Env):
 
         self.robot.load()
         self.robot.step_simulation = self.step_simulation
-        self.control_method = 'end'
+        self.control_method = 'joint'
 
         # custom sliders to tune parameters (name of the parameter,range,initial value)
         self.xin = p.addUserDebugParameter("x", -0.224, 0.224, 0)
@@ -70,8 +70,8 @@ class CubesGrasp(Env):
         # The end-effector position and quaternion (x, y, z, qx, qy, qz, qw) and gripper opening length in[0,1]
         # And the target cube position and quaternion (x, y, z, qx, qy, qz, qw)
         self.observation_space = Box(low=np.array([0]*2 + [-1.0]*3 + [-1]*4 + [0] + [-1.0]*3 + [-1.0]*4), high=np.array([1]*2 + [1.0]*3 + [1.0]*4 + [1] + [1.0]*3 + [1.0]*4), dtype=np.float64)
-        # Actions: prob1,prob2, end-effector position and quaternion, gripper action (open/close)
-        self.action_space = Box(low=np.array([0]*2 + [-1]*3 + [-1]*4 + [0]), high=np.array([1]*2 + [+1]*3 + [+1]*4 + [1]), dtype=np.float32)
+        # Actions: prob1,prob2, joint_states, gripper action (open/close)
+        self.action_space = Box(low=np.array([0]*2 + [-math.pi]*6 + [0]), high=np.array([1]*2 + [+math.pi]*6 + [1]), dtype=np.float32)
 
     def step_simulation(self):
         """
@@ -123,9 +123,6 @@ class CubesGrasp(Env):
 
         action_move_actions = action[2:-1]
         action_gripper_actions = action[-1]
-        action_move_quaternion = action_move_actions[3:7]
-        action_move_quaternion = normalize_quaternion(*action_move_quaternion)
-        action_move_actions[3:7] = action_move_quaternion
 
         if action_move_prob + action_gripper_prob == 0: # Avoid the sum to be zero
             action_selected = random.choices([0, 1], weights=[0.5, 0.5], k=1)[0]
@@ -322,7 +319,7 @@ class CubesGrasp(Env):
         # Generate a random radius between r1 and r2
         r = random.uniform(rmin, rmax)
         # Generate a random angle between 0 and 2*pi
-        theta = random.uniform(0, 2 * math.pi)
+        theta = random.uniform(-math.pi, 0)
         # Convert polar coordinates to Cartesian coordinates
         x = r * math.cos(theta)
         y = r * math.sin(theta)
