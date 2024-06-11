@@ -285,8 +285,9 @@ class CubesGrasp(Env):
 
         #print_link_names_and_indices(self.robot.id)
 
+        """
         # Position the end effector above the cube
-        """new_pose = list(self.get_cube_pose(self.target_id))
+        new_pose = list(self.get_cube_pose(self.target_id))
         new_pose[2] += 0.27 # A little bit higher
         new_pose[1] += 0.01 # A little bit backwards
         new_pose[3:] = [0, -0.707, 0, -0.707] # Reorient the end effector downwards
@@ -321,8 +322,8 @@ class CubesGrasp(Env):
         rmax = 0.8
         # Generate a random radius between r1 and r2
         r = random.uniform(rmin, rmax)
-        # Generate a random angle between 0 and 2*pi
-        theta = random.uniform(0, 2 * math.pi)
+        # Generate a random angle in fron of the arm
+        theta = random.uniform(-math.pi, 0)
         # Convert polar coordinates to Cartesian coordinates
         x = r * math.cos(theta)
         y = r * math.sin(theta)
@@ -409,3 +410,8 @@ class CubesGrasp(Env):
     
 
  
+if __name__ == "__main__":
+    env = CubesGrasp()
+    for _ in range(50):
+        obs = env.reset()
+        time.sleep(3)

@@ -318,7 +318,7 @@ class CubesGrasp(Env):
         rmax = 0.8
         # Generate a random radius between r1 and r2
         r = random.uniform(rmin, rmax)
-        # Generate a random angle between 0 and 2*pi
+        # Generate a random angle in fron of the arm
         theta = random.uniform(-math.pi, 0)
         # Convert polar coordinates to Cartesian coordinates
         x = r * math.cos(theta)

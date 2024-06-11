@@ -73,7 +73,8 @@ if str_algo == "ActionSAC":
 	else:
 		net_arch_nodes = hyperparams['policy_kwargs']['net_arch'][0]
 	
-	action_sizes = [6, 1]
+	action_sizes = [7, 1] # end-effector based control version
+	#action_sizes = [6, 1] # joint-based control version
 	n_actions = len(action_sizes)
 	policy_kwargs = dict(
 		net_arch=dict(pi=[env.action_space.shape[0]], qf=[net_arch_nodes, net_arch_nodes]),
