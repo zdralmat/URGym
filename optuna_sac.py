@@ -38,8 +38,15 @@ def objective(trial: optuna.Trial):
     policy_kwargs = dict(net_arch=[net_arch_nodes, net_arch_nodes])
 
     if not use_asac:
-        model = SAC('MlpPolicy', env, verbose=True, learning_starts=1000, gamma=gamma, tau=tau, learning_rate=learning_rate,
-                    batch_size=batch_size, gradient_steps=gradient_steps, use_sde=use_sde, policy_kwargs=policy_kwargs)    
+        if policy_file:
+            # Ignore policy kwargs and sde
+            model = SAC.load(f"{policy_file}", env=env, verbose=True, gamma=gamma, tau=tau, learning_rate=learning_rate,
+                        batch_size=batch_size, gradient_steps=gradient_steps)
+            replay_buffer_file = policy_file.removesuffix("_policy.zip") + "_replay_buffer.pkl"
+            model.load_replay_buffer(replay_buffer_file)
+        else:
+            model = SAC('MlpPolicy', env, verbose=True, learning_starts=1000, gamma=gamma, tau=tau, learning_rate=learning_rate,
+                        batch_size=batch_size, gradient_steps=gradient_steps, use_sde=use_sde, policy_kwargs=policy_kwargs)    
     else:
         print("Using ActionSAC...")
         action_sizes = [7, 1] # end-effector based control version
@@ -49,8 +56,16 @@ def objective(trial: optuna.Trial):
             net_arch=dict(pi=[env.action_space.shape[0]], qf=[net_arch_nodes, net_arch_nodes]),
             action_config=dict(n_actions=n_actions, n_nodes=net_arch_nodes, layers=[(action_sizes[0], nn.Tanh), (action_sizes[1], nn.Tanh)]),
         )        
-        model = ActionSAC(ActionSACPolicy, env, verbose=True, learning_starts=1000, gamma=gamma, tau=tau, learning_rate=learning_rate,
-                    batch_size=batch_size, gradient_steps=gradient_steps, use_sde=use_sde, policy_kwargs=policy_kwargs)    
+
+        if policy_file:
+            # Ignore policy kwargs and sde
+            model = ActionSAC.load(f"{policy_file}", env=env, verbose=True, gamma=gamma, tau=tau, learning_rate=learning_rate,
+                        batch_size=batch_size, gradient_steps=gradient_steps)
+            replay_buffer_file = policy_file.removesuffix("_policy.zip") + "_replay_buffer.pkl"
+            model.load_replay_buffer(replay_buffer_file)
+        else:
+            model = ActionSAC(ActionSACPolicy, env, verbose=True, learning_starts=1000, gamma=gamma, tau=tau, learning_rate=learning_rate,
+                        batch_size=batch_size, gradient_steps=gradient_steps, use_sde=use_sde, policy_kwargs=policy_kwargs)    
 
     print(f"Trial {trial.number} with hyperparameters: {trial.params}")
 
@@ -115,6 +130,7 @@ parser.add_argument('-m', '--name', type=str, help='name of the study')
 parser.add_argument('-c', '--continue', dest="cont", action='store_true', default=False, help='continue existing study')
 parser.add_argument('-b', '--best', action='store_true', default=False, help='do not optimize, only print and save the best trial')
 parser.add_argument('--asac', action='store_true', default=False, help='use ActionSAC instead of SAC')
+parser.add_argument('-p', '--policy', type=str, default=None, help='policy to load as starting point, it will also read the replay buffer')
 
 args = parser.parse_args()
 
@@ -129,6 +145,7 @@ full_study_dir_path = os.path.join(optuna_dir, study_dir)
 storage_file = f"sqlite:///{optuna_dir}optuna.db"
 do_study = not args.best
 use_asac = args.asac
+policy_file = args.policy
 
 
 if do_study:
