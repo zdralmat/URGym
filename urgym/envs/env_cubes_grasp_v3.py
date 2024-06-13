@@ -274,14 +274,12 @@ class CubesGrasp(Env):
 
         obs_robot.update(self.robot.get_joint_obs())
 
-        approached = self.object_approached(self.target_id)
+        """approached = self.object_approached(self.target_id)
         grasped = self.object_grasped(self.target_id)
         if grasped: # If grasped, we also consider it as approached, altough the gripper may be almost closed
             approached = True
-        obs = np.array([int(s) for s in [approached, grasped]]) # Boolean to int (0,1)
-        if grasped:
-            print("Ready to raise...")
-        #obs = np.array([int(s) for s in list(self.subgoals_achieved.values())]) # Boolean to int (0,1) Old version based on subgoals achieved
+        obs = np.array([int(s) for s in [approached, grasped]]) # Boolean to int (0,1)"""
+        obs = np.array([int(s) for s in list(self.subgoals_achieved.values())]) # Boolean to int (0,1) Version based on subgoals achieved
         obs = np.append(obs, obs_robot["ee_pos"])
         obs = np.append(obs, self.get_gripper_opening_length())
         obs = np.append(obs, self.get_cube_pose(self.target_id))
@@ -317,7 +315,8 @@ class CubesGrasp(Env):
         p.disconnect(self.physicsClient)
 
     def create_cube(self, x: float, y: float, z: float, color:list=None):
-        id = p.loadURDF("cube.urdf", [x, y, z], p.getQuaternionFromEuler([0, 0, 0]), useFixedBase=False, globalScaling = 0.04)
+        rotation_on_z = random.uniform(-math.pi, math.pi)
+        id = p.loadURDF("cube.urdf", [x, y, z], p.getQuaternionFromEuler([0, 0, rotation_on_z]), useFixedBase=False, globalScaling = 0.04)
         if color != None:
             p.changeVisualShape(id, -1, rgbaColor=color)
         self.cubes.append(id)

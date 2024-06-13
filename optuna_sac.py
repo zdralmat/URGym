@@ -39,9 +39,9 @@ def objective(trial: optuna.Trial):
 
     if not use_asac:
         if policy_file:
-            # Ignore policy kwargs and sde
+            # Ignore policy kwargs and sde as they are already saved in the policy file and cannot be changed
             model = SAC.load(f"{policy_file}", env=env, verbose=True, gamma=gamma, tau=tau, learning_rate=learning_rate,
-                        batch_size=batch_size, gradient_steps=gradient_steps)
+                        batch_size=batch_size, gradient_steps=gradient_steps, tensorboard_log=None)
             replay_buffer_file = policy_file.removesuffix("_policy.zip") + "_replay_buffer.pkl"
             model.load_replay_buffer(replay_buffer_file)
         else:
@@ -58,9 +58,9 @@ def objective(trial: optuna.Trial):
         )        
 
         if policy_file:
-            # Ignore policy kwargs and sde
+            # Ignore policy kwargs and sde as they are already saved in the policy file and cannot be changed
             model = ActionSAC.load(f"{policy_file}", env=env, verbose=True, gamma=gamma, tau=tau, learning_rate=learning_rate,
-                        batch_size=batch_size, gradient_steps=gradient_steps)
+                        batch_size=batch_size, gradient_steps=gradient_steps, tensorboard_log=None)
             replay_buffer_file = policy_file.removesuffix("_policy.zip") + "_replay_buffer.pkl"
             model.load_replay_buffer(replay_buffer_file)
         else:
