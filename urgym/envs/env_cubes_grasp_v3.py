@@ -9,7 +9,6 @@ from gymnasium.spaces import Box
 
 import pybullet as p
 import pybullet_data
-from torch import GradScaler
 from urgym.utilities import YCBModels, Camera, rotate_quaternion, geometric_distance_reward, z_alignment_distance, normalize_quaternion, print_link_names_and_indices
 from urgym.robot import UR5Robotiq85
 import random
@@ -326,7 +325,7 @@ class CubesGrasp(Env):
         # Convert polar coordinates to Cartesian coordinates
         x = r * math.cos(theta)
         y = r * math.sin(theta)
-        
+
         self.create_cube(x, y, 0.1, [1,0,0,1])
         #self.create_cube(0.0, -0.2, 0.1, [1,0,0,1])
         #self.create_cube(0.1, -0.1, 0.1, [0,0,1,1])

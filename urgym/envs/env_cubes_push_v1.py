@@ -31,12 +31,12 @@ class CubesPush(Env):
             self.visualize = False
 
         # Set observation and action spaces
-        # Observations: the end-effector position and quaternion (x, y, z, qx, qy, qz, qw)
+        # Observations: the end-effector position
         # And position (x, y, z) of the two cubes
-        self.observation_space = Box(low=np.array([-1.0]*3 + [-math.pi]*4 + [-1.0]*6), high=np.array([1.0]*3 + [math.pi]*4 + [1.0]*6), dtype=np.float64)
+        self.observation_space = Box(low=np.array([-1.0]*3 + [-1.0]*6), high=np.array([1.0]*3 + [1.0]*6), dtype=np.float64)
         # Actions: joints 1 to 6
         #self.action_space = Box(low=np.array([-math.pi]*6), high=np.array([+math.pi]*6), dtype=np.float32)
-        self.action_space = Box(low=np.array([-math.pi/20]*6), high=np.array([+math.pi/20]*6), dtype=np.float32)
+        self.action_space = Box(low=np.array([-0.1]*3), high=np.array([+0.1]*3), dtype=np.float32)
 
         current_dir = os.path.dirname(__file__)
         ycb_models = YCBModels(
@@ -62,7 +62,7 @@ class CubesPush(Env):
 
         self.robot.load()
         self.robot.step_simulation = self.step_simulation
-        self.control_method = 'joint'
+        self.control_method = 'end'
 
         # custom sliders to tune parameters (name of the parameter,range,initial value)
         self.xin = p.addUserDebugParameter("x", -0.224, 0.224, 0)
@@ -122,9 +122,9 @@ class CubesPush(Env):
         reward = 0
         
         # Differential version
-        joint_states = deepcopy(self.robot.get_joint_states())
-        joint_states += action
-        self.robot.move_ee(joint_states, self.control_method)
+        ee_pose = list(self.robot.get_ee_pose())
+        ee_pose[:3] += action
+        self.robot.move_ee(ee_pose, self.control_method)
 
         self.wait_until_stable()
                 
@@ -134,6 +134,7 @@ class CubesPush(Env):
             terminated = False
         elif self.is_robot_touching_cube(self.cubes[0]) or self.is_robot_touching_cube(self.cubes[1]):
             reward, success = self.update_reward()
+            reward += 0.1 # Reward for touching the cube
             terminated = success
         else:
             success = False

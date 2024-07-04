@@ -85,7 +85,8 @@ if policy_file:
 	# No need to load the hyperparams file as they are already stored in the policy file
 	model = algo.load(f"{policy_file}", env=env, tensorboard_log=tblog_dir, verbose=True)
 	replay_buffer_file = policy_file.removesuffix("_policy.zip") + "_replay_buffer.pkl"
-	model.load_replay_buffer(replay_buffer_file)
+	if algo in [SAC, TD3, DDPG, DQN]:
+		model.load_replay_buffer(replay_buffer_file)
 	reset_tblog = False
 else:
 	# Noise
@@ -105,7 +106,8 @@ checkpoint_callback = CheckpointCallback(save_freq=10_000, save_path=f"./checkpo
 model.learn(total_timesteps=int(n_steps), callback=checkpoint_callback, progress_bar=True, tb_log_name=f"{experiment_name}_{str_algo}", reset_num_timesteps=reset_tblog)
 
 model.save(f"policies/{experiment_name}_{str_algo}_policy.zip")
-model.save_replay_buffer(f"policies/{experiment_name}_{str_algo}_replay_buffer.pkl")
+if algo in [SAC, TD3, DDPG, DQN]:
+	model.save_replay_buffer(f"policies/{experiment_name}_{str_algo}_replay_buffer.pkl")
 
 
 env.close()
