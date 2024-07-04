@@ -135,6 +135,7 @@ class CubesPush(Env):
         elif self.is_robot_touching_cube(self.cubes[0]) or self.is_robot_touching_cube(self.cubes[1]):
             reward, success = self.update_reward()
             reward += 0.1 # Reward for touching the cube
+            print("Touched!")
             terminated = success
         else:
             success = False
@@ -214,7 +215,7 @@ class CubesPush(Env):
 
         obs.update(self.robot.get_joint_obs())
 
-        obs = np.array(obs["ee_pos"])
+        obs = np.array(obs["ee_pos"])[:3]
         cube1_position = self.get_cube_pose(self.cubes[0])[:3]
         cube2_position = self.get_cube_pose(self.cubes[1])[:3]
         obs = np.append(obs, [cube1_position, cube2_position])
