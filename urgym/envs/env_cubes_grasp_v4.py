@@ -19,7 +19,7 @@ class CubesGrasp(Env):
     SIMULATION_STEP_DELAY = 1 / 240.
     OBJECT_RAISE_HEIGHT = 0.2
 
-    def __init__(self, vertical_reward = False, camera=None, render_mode='human') -> None:
+    def __init__(self, camera=None, render_mode='human') -> None:
         if render_mode == 'human':
             self.vis = True
         else:
@@ -49,7 +49,7 @@ class CubesGrasp(Env):
 
         self.robot.load()
         self.robot.step_simulation = self.step_simulation
-        self.control_method = 'end'
+        self.control_method = 'joint'
 
         # custom sliders to tune parameters (name of the parameter,range,initial value)
         self.xin = p.addUserDebugParameter("x", -0.224, 0.224, 0)
@@ -62,8 +62,6 @@ class CubesGrasp(Env):
 
         self.cubes = []
 
-        self.vertical_reward = vertical_reward
-
         self.subgoals_achieved = {'approached': False, 'grasped': False}
 
         # Set observation and action spaces
@@ -72,8 +70,8 @@ class CubesGrasp(Env):
         # The end-effector position and quaternion (x, y, z, qx, qy, qz, qw) and gripper opening length in[0,1]
         # And the target cube position and quaternion (x, y, z, qx, qy, qz, qw)
         self.observation_space = Box(low=np.array([0]*2 + [-1.0]*3 + [-1]*4 + [0] + [-1.0]*3 + [-1.0]*4), high=np.array([1]*2 + [1.0]*3 + [1.0]*4 + [1] + [1.0]*3 + [1.0]*4), dtype=np.float64)
-        # Actions: prob1,prob2, end-effector position and quaternion, gripper action (open/close)
-        self.action_space = Box(low=np.array([0]*2 + [-1]*3 + [-1]*4 + [0]), high=np.array([1]*2 + [+1]*3 + [+1]*4 + [1]), dtype=np.float32)
+        # Actions: prob1,prob2, joint_states, gripper action (open/close)
+        self.action_space = Box(low=np.array([0]*2 + [-math.pi]*6 + [0]), high=np.array([1]*2 + [+math.pi]*6 + [1]), dtype=np.float32)
 
     def step_simulation(self):
         """
@@ -125,9 +123,6 @@ class CubesGrasp(Env):
 
         action_move_actions = action[2:-1]
         action_gripper_actions = action[-1]
-        action_move_quaternion = action_move_actions[3:7]
-        action_move_quaternion = normalize_quaternion(*action_move_quaternion)
-        action_move_actions[3:7] = action_move_quaternion
 
         if action_move_prob + action_gripper_prob == 0: # Avoid the sum to be zero
             action_selected = random.choices([0, 1], weights=[0.5, 0.5], k=1)[0]
@@ -165,11 +160,6 @@ class CubesGrasp(Env):
                 print("Grasped!")
                 self.subgoals_achieved['grasped'] = True
                 reward += 5
-                # Additional bonus reward based on vertical alignment, if configured
-                if self.vertical_reward:
-                    vertical_alignment = z_alignment_distance(*self.robot.get_ee_pose()[3:])
-                    reward += geometric_distance_reward(vertical_alignment, 0.15, 0.3)*2
-
         elif self.subgoals_achieved['approached'] and self.subgoals_achieved['grasped']: 
             if self.object_raised(self.target_id): # Raised for first time
                 print("Raised!")
@@ -197,7 +187,7 @@ class CubesGrasp(Env):
         """if self.touched_with_fingers(self.cubes[0]):
             print("Touched with fingers!")
             reward += 0.1"""
-        
+
         return reward
     
     def distance_to_target(self, target_id):
@@ -276,10 +266,8 @@ class CubesGrasp(Env):
 
         """approached = self.object_approached(self.target_id)
         grasped = self.object_grasped(self.target_id)
-        if grasped: # If grasped, we also consider it as approached, altough the gripper may be almost closed
-            approached = True
         obs = np.array([int(s) for s in [approached, grasped]]) # Boolean to int (0,1)"""
-        obs = np.array([int(s) for s in list(self.subgoals_achieved.values())]) # Boolean to int (0,1) Version based on subgoals achieved
+        obs = np.array([int(s) for s in list(self.subgoals_achieved.values())]) # Boolean to int (0,1)
         obs = np.append(obs, obs_robot["ee_pos"])
         obs = np.append(obs, self.get_gripper_opening_length())
         obs = np.append(obs, self.get_cube_pose(self.target_id))
@@ -294,11 +282,10 @@ class CubesGrasp(Env):
 
         #print_link_names_and_indices(self.robot.id)
 
-        
-        """# Position the end effector above the cube
-        new_pose = list(self.get_cube_pose(self.target_id))
-        new_pose[2] += 0.05 # A little bit higher
-        new_pose[1] += 0.00 # A little bit backwards
+        # Position the end effector above the cube
+        """new_pose = list(self.get_cube_pose(self.target_id))
+        new_pose[2] += 0.27 # A little bit higher
+        new_pose[1] += 0.01 # A little bit backwards
         new_pose[3:] = [0, -0.707, 0, -0.707] # Reorient the end effector downwards
         new_pose[3:] = rotate_quaternion(new_pose[3:], math.pi/2, [0, 0, 0]) # Rotate the end effector 90 degrees
         self.robot.move_ee(new_pose, 'end')
@@ -315,33 +302,10 @@ class CubesGrasp(Env):
         p.disconnect(self.physicsClient)
 
     def create_cube(self, x: float, y: float, z: float, color:list=None):
-        rotation_on_z = random.uniform(-math.pi, math.pi)
-        id = p.loadURDF("cube.urdf", [x, y, z], p.getQuaternionFromEuler([0, 0, rotation_on_z]), useFixedBase=False, globalScaling = 0.04)
+        id = p.loadURDF("cube.urdf", [x, y, z], p.getQuaternionFromEuler([0, 0, 0]), useFixedBase=False, globalScaling = 0.04)
         if color != None:
             p.changeVisualShape(id, -1, rgbaColor=color)
         self.cubes.append(id)
-
-    def create_object(self, urdf_path, x: float, y: float, z: float, scale: float , color:list=None):
-        """
-        Create an object in the environment.
-
-        Args:
-            urdf_path (str): The path to the URDF file of the object.
-                Examples: "lego/lego.urdf", "cube.urdf", "sphere.urdf", "humanoid/humanoid.urdf", "objects/mug.urdf", "aliengo/aliengo.urdf"
-            x (float): The x-coordinate of the object's initial position.
-            y (float): The y-coordinate of the object's initial position.
-            z (float): The z-coordinate of the object's initial position.
-            scale (float): The scaling factor for the object's size.
-            color (list, optional): The RGBA color values for the object's visual shape. Defaults to None.
-
-        Returns:
-            int: The unique ID of the created object in the physics simulation.
-        """
-        id = p.loadURDF(urdf_path, [x, y, z], p.getQuaternionFromEuler([0, 0, 0]), useFixedBase=False, globalScaling = scale)
-        if color != None:
-            p.changeVisualShape(id, -1, rgbaColor=color)
-        self.cubes.append(id)
-        return id
 
     def create_cubes(self):
         for id in self.cubes:
@@ -359,7 +323,7 @@ class CubesGrasp(Env):
         # Convert polar coordinates to Cartesian coordinates
         x = r * math.cos(theta)
         y = r * math.sin(theta)
-
+        
         self.create_cube(x, y, 0.1, [1,0,0,1])
         #self.create_cube(0.0, -0.2, 0.1, [1,0,0,1])
         #self.create_cube(0.1, -0.1, 0.1, [0,0,1,1])
@@ -442,8 +406,3 @@ class CubesGrasp(Env):
     
 
  
-if __name__ == "__main__":
-    env = CubesGrasp()
-    for _ in range(50):
-        obs = env.reset()
-        time.sleep(3)

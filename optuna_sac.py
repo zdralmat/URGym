@@ -38,16 +38,34 @@ def objective(trial: optuna.Trial):
     policy_kwargs = dict(net_arch=[net_arch_nodes, net_arch_nodes])
 
     if not use_asac:
-        model = SAC('MlpPolicy', env, verbose=True, learning_starts=1000, gamma=gamma, tau=tau, learning_rate=learning_rate,
-                    batch_size=batch_size, gradient_steps=gradient_steps, use_sde=use_sde, policy_kwargs=policy_kwargs)    
+        if policy_file:
+            # Ignore policy kwargs and sde as they are already saved in the policy file and cannot be changed
+            model = SAC.load(f"{policy_file}", env=env, verbose=True, gamma=gamma, tau=tau, learning_rate=learning_rate,
+                        batch_size=batch_size, gradient_steps=gradient_steps, tensorboard_log=None)
+            replay_buffer_file = policy_file.removesuffix("_policy.zip") + "_replay_buffer.pkl"
+            model.load_replay_buffer(replay_buffer_file)
+        else:
+            model = SAC('MlpPolicy', env, verbose=True, learning_starts=1000, gamma=gamma, tau=tau, learning_rate=learning_rate,
+                        batch_size=batch_size, gradient_steps=gradient_steps, use_sde=use_sde, policy_kwargs=policy_kwargs)    
     else:
         print("Using ActionSAC...")
+        action_sizes = [7, 1] # end-effector based control version
+        #action_sizes = [6, 1] # joint-based control version
+        n_actions = len(action_sizes)
         policy_kwargs = dict(
             net_arch=dict(pi=[env.action_space.shape[0]], qf=[net_arch_nodes, net_arch_nodes]),
-            action_config=dict(n_actions=2, n_nodes=net_arch_nodes, layers=[(7, nn.Tanh), (1, nn.Tanh)]),
+            action_config=dict(n_actions=n_actions, n_nodes=net_arch_nodes, layers=[(action_sizes[0], nn.Tanh), (action_sizes[1], nn.Tanh)]),
         )        
-        model = ActionSAC(ActionSACPolicy, env, verbose=True, learning_starts=1000, gamma=gamma, tau=tau, learning_rate=learning_rate,
-                    batch_size=batch_size, gradient_steps=gradient_steps, use_sde=use_sde, policy_kwargs=policy_kwargs)    
+
+        if policy_file:
+            # Ignore policy kwargs and sde as they are already saved in the policy file and cannot be changed
+            model = ActionSAC.load(f"{policy_file}", env=env, verbose=True, gamma=gamma, tau=tau, learning_rate=learning_rate,
+                        batch_size=batch_size, gradient_steps=gradient_steps, tensorboard_log=None)
+            replay_buffer_file = policy_file.removesuffix("_policy.zip") + "_replay_buffer.pkl"
+            model.load_replay_buffer(replay_buffer_file)
+        else:
+            model = ActionSAC(ActionSACPolicy, env, verbose=True, learning_starts=1000, gamma=gamma, tau=tau, learning_rate=learning_rate,
+                        batch_size=batch_size, gradient_steps=gradient_steps, use_sde=use_sde, policy_kwargs=policy_kwargs)    
 
     print(f"Trial {trial.number} with hyperparameters: {trial.params}")
 
@@ -78,11 +96,11 @@ def create_study_dir(optuna_dir, study_dir, delete_existing=True):
         if delete_existing:
             shutil.rmtree(full_study_dir_path)
             print(f"Removed existing study directory and all its contents: {full_study_dir_path}")
-    
-            # Create the second level directory
-            os.makedirs(full_study_dir_path)
-            print(f"Created study directory: {full_study_dir_path}")
-            os.makedirs(full_study_dir_path + "/models")
+
+    # Create the second level directory if required
+    os.makedirs(full_study_dir_path, exist_ok=True)
+    print(f"Created study directory: {full_study_dir_path}")
+    os.makedirs(os.path.join(full_study_dir_path, "models"), exist_ok=True)
 
 def get_best_trial(storage_file, study_name):
     # Load the study
@@ -112,6 +130,7 @@ parser.add_argument('-m', '--name', type=str, help='name of the study')
 parser.add_argument('-c', '--continue', dest="cont", action='store_true', default=False, help='continue existing study')
 parser.add_argument('-b', '--best', action='store_true', default=False, help='do not optimize, only print and save the best trial')
 parser.add_argument('--asac', action='store_true', default=False, help='use ActionSAC instead of SAC')
+parser.add_argument('-p', '--policy', type=str, default=None, help='policy to load as starting point, it will also read the replay buffer')
 
 args = parser.parse_args()
 
@@ -126,6 +145,7 @@ full_study_dir_path = os.path.join(optuna_dir, study_dir)
 storage_file = f"sqlite:///{optuna_dir}optuna.db"
 do_study = not args.best
 use_asac = args.asac
+policy_file = args.policy
 
 
 if do_study:
