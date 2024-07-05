@@ -8,15 +8,24 @@ register(
 )
 
 
+# Original version, no valid for training
 register(
     id='URGym/CubesPush-v0',
     entry_point='urgym.envs.env_cubes_push_v0:CubesPush',
     max_episode_steps=50,
 )
 
+# Cubes at close position
 register(
     id='URGym/CubesPush-v1',
     entry_point='urgym.envs.env_cubes_push_v1:CubesPush',
+    max_episode_steps=50,
+)
+
+# Cubes at random position
+register(
+    id='URGym/CubesPush-v2',
+    entry_point='urgym.envs.env_cubes_push_v2:CubesPush',
     max_episode_steps=50,
 )
 
@@ -32,6 +41,7 @@ register(
     max_episode_steps=20,
 )
 
+#
 register(
     id='URGym/CubesGrasp-v2',
     entry_point='urgym.envs.env_cubes_grasp_v2:CubesGrasp',
