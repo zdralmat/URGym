@@ -31,12 +31,12 @@ class CubesPush(Env):
             self.visualize = False
 
         # Set observation and action spaces
-        # Observations: the end-effector position and quaternion (x, y, z, qx, qy, qz, qw)
+        # Observations: the end-effector position
         # And position (x, y, z) of the two cubes
-        self.observation_space = Box(low=np.array([-1.0]*3 + [-math.pi]*4 + [-1.0]*6), high=np.array([1.0]*3 + [math.pi]*4 + [1.0]*6), dtype=np.float64)
+        self.observation_space = Box(low=np.array([-1.0]*3 + [-1.0]*6), high=np.array([1.0]*3 + [1.0]*6), dtype=np.float64)
         # Actions: joints 1 to 6
         #self.action_space = Box(low=np.array([-math.pi]*6), high=np.array([+math.pi]*6), dtype=np.float32)
-        self.action_space = Box(low=np.array([-math.pi/20]*6), high=np.array([+math.pi/20]*6), dtype=np.float32)
+        self.action_space = Box(low=np.array([-0.1]*3), high=np.array([+0.1]*3), dtype=np.float32)
 
         current_dir = os.path.dirname(__file__)
         ycb_models = YCBModels(
@@ -48,7 +48,7 @@ class CubesPush(Env):
                         0.1, 5, (320, 320), 40)"""
         self.camera = camera
         # robot = Panda((0, 0.5, 0), (0, 0, math.pi))
-        self.robot = UR5Robotiq85((0, 0.5, 0), (0, 0, 0))
+        self.robot = UR5Robotiq85((0, 0, 0), (0, 0, 0))
 
         # define environment        
         self.physicsClient = p.connect(p.GUI if self.visualize else p.DIRECT)
@@ -57,12 +57,12 @@ class CubesPush(Env):
         # Hide right and left menus
         p.configureDebugVisualizer(p.COV_ENABLE_GUI,0)
         # Reorient the debug camera
-        p.resetDebugVisualizerCamera(cameraDistance=2, cameraYaw=50, cameraPitch=-25, cameraTargetPosition=[-0.5,+0.5,0])
+        p.resetDebugVisualizerCamera(cameraDistance=1.8, cameraYaw=50, cameraPitch=-25, cameraTargetPosition=[-0.5,+0.2,0])
         self.planeID = p.loadURDF("plane.urdf")
 
         self.robot.load()
         self.robot.step_simulation = self.step_simulation
-        self.control_method = 'joint'
+        self.control_method = 'end'
 
         # custom sliders to tune parameters (name of the parameter,range,initial value)
         self.xin = p.addUserDebugParameter("x", -0.224, 0.224, 0)
@@ -74,6 +74,9 @@ class CubesPush(Env):
         self.gripper_opening_length_control = p.addUserDebugParameter("gripper_opening_length", 0, 0.085, 0.04)
 
         self.cubes = []
+
+        self.positive_reward_radius = 0.1
+        draw_circle_area(radius=self.positive_reward_radius)
 
 
     def step_simulation(self):
@@ -122,18 +125,22 @@ class CubesPush(Env):
         reward = 0
         
         # Differential version
-        joint_states = deepcopy(self.robot.get_joint_states())
-        joint_states += action
-        self.robot.move_ee(joint_states, self.control_method)
+        ee_pose = list(self.robot.get_ee_pose())
+        ee_pose[:3] += action
+        ee_pose[3:] = self.vertical_queternion # to keep the end effector vertical at all times
+        self.robot.move_ee(ee_pose, self.control_method)
 
         self.wait_until_stable()
                 
         if self.is_floor_collision():
-            reward -= 1
+            #reward -= 1
+            reward -= 0.01
             success = False
             terminated = False
-        elif self.is_robot_touching_cube(self.cubes[0]) or self.is_robot_touching_cube(self.cubes[1]):
+        elif self.touched_with_fingers(self.cubes[1]):
             reward, success = self.update_reward()
+            reward += 0.1 # Reward for touching the cube
+            print("Touched!")
             terminated = success
         else:
             success = False
@@ -161,7 +168,7 @@ class CubesPush(Env):
             cube2_pos = self.get_cube_pose(self.cubes[1])[:3]
             distance = np.linalg.norm(np.array(cube1_pos) - np.array(cube2_pos))
 
-            reward += geometric_distance_reward(distance, 0.1, 0.5) / 10
+            reward += geometric_distance_reward(distance, self.positive_reward_radius, 0.5) / 10
 
         # Sparse reward: if the distance between the cubes is less than 0.05
         if self.are_cubes_close(self.cubes[0], self.cubes[1], 0.05):
@@ -181,9 +188,14 @@ class CubesPush(Env):
                     return True
         return False
 
-    def is_robot_touching_cube(self, cube_id):
-        contact_points = p.getContactPoints(bodyA=self.robot.id, bodyB=cube_id)
-        if contact_points:
+    def touched_with_fingers(self, object_id):
+        contact_points = p.getContactPoints(object_id, self.robot.id)
+        fingers_indices = list(range(9, 19))
+        contact_with_links = any(
+            point[4] in fingers_indices or  point[3] in fingers_indices
+            for point in contact_points
+        )
+        if contact_with_links:
             return True
         return False
 
@@ -213,7 +225,7 @@ class CubesPush(Env):
 
         obs.update(self.robot.get_joint_obs())
 
-        obs = np.array(obs["ee_pos"])
+        obs = np.array(obs["ee_pos"])[:3]
         cube1_position = self.get_cube_pose(self.cubes[0])[:3]
         cube2_position = self.get_cube_pose(self.cubes[1])[:3]
         obs = np.append(obs, [cube1_position, cube2_position])
@@ -225,10 +237,11 @@ class CubesPush(Env):
         self.create_cubes()
 
         # Position the end effector above the cube
-        new_pose = list(self.get_cube_pose(self.cubes[0]))
+        new_pose = list(self.get_cube_pose(self.cubes[1]))
         new_pose[2] += 0.2 # A little bit higher
         #new_pose[3:] = rotate_quaternion(new_pose[3:], math.pi/2, [1, 0, 0]) # Reorient the end effector
         new_pose[3:] = rotate_quaternion(new_pose[3:], math.pi/2, [0, 1, 0]) # Reorient the end effector
+        self.vertical_queternion = new_pose[3:]
         self.robot.move_ee(new_pose, 'end')
         self.robot.close_gripper()
         self.wait_until_stable()
@@ -248,15 +261,28 @@ class CubesPush(Env):
         for id in self.cubes:
             p.removeBody(id)
         self.cubes = []
-        """coors = [random.uniform(-0.3, -0.1) + (0.4 if random.random() > 0.5 else 0) for _ in range(4)]
+        """coors = [random.uniform(-0.1, +0.1)]*4
 
         self.create_cube(coors[0], coors[1], 0.2)
-        self.create_cube(coors[2], coors[3], 0.2, [1,0,0,1]) """
-        self.create_cube(0.1, -0.1, 0.1)
-        self.create_cube(0.1, -0.2, 0.1, [1,0,0,1])
+        self.create_cube(coors[2], coors[3], 0.2, [1,0,0,1])"""
+
+        self.create_cube(0.0, -0.5, 0.1)
+        x = random.uniform(-0.1, +0.1)
+        self.create_cube(x, -0.7, 0.1, [1,0,0,1])
 
     def get_cube_pose(self, cube_id):
         position, orientation = p.getBasePositionAndOrientation(cube_id)
         pose = position + orientation
         return pose
     
+def draw_circle_area(radius=0.1, center_x=0.0, center_y=-0.5, segments=100, color=[0, 1.0, 0, 0.4]):
+    visual_shape_id = p.createVisualShape(
+        shapeType=p.GEOM_CYLINDER,
+        radius=radius,
+        length=0.001,  # Very thin to act as a visual aid
+        rgbaColor=color
+    )
+    p.createMultiBody(
+        baseVisualShapeIndex=visual_shape_id,
+        basePosition=[center_x, center_y, 0.0001]  # Slightly above the ground to avoid z-fighting
+    )
