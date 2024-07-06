@@ -1,8 +1,7 @@
 import time
 import math
 import numpy as np
-from typing import Optional
-import os
+from typing import NoReturn, Optional
 import random
 
 from gymnasium import Env
@@ -10,7 +9,7 @@ from gymnasium.spaces import Box
 
 import pybullet as p
 import pybullet_data
-from urgym.utilities import YCBModels, Camera, rotate_quaternion, geometric_distance_reward
+from urgym.utilities import rotate_quaternion, geometric_distance_reward
 from urgym.robot import UR5Robotiq85
 
 class CubesPush(Env):
@@ -32,7 +31,7 @@ class CubesPush(Env):
         -0.1 if the distance is greater than 0.5, cubes are far away.
         [-0.1, 0] if the distance is between 0.5 and 0.1.
         [0, 0.1] if the distance is between 0.1 and 0.05.
-    - Success reward: If the distance between the two cubes is less than 0.05, a reward of 10 is given.
+    - Success reward: If the distance between the two cubes is less than 0.05 (close contact), a reward of 10 is given.
     - Collision penalty: A penalty of -0.01 is given if the robot collides with the floor.
     - Time penalty: A penalty of -0.1 is given at each step.
     """
@@ -56,16 +55,14 @@ class CubesPush(Env):
             self.visualize = False
 
         # Set observation and action spaces
-        # Observations: the end-effector position
-        # And position (x, y, z) of the two cubes
+        # Observations: the end-effector position and position (x, y, z) of the two cubes
         self.observation_space = Box(low=np.array([-1.0]*3 + [-1.0]*6), high=np.array([1.0]*3 + [1.0]*6), dtype=np.float64)
-        # Actions: joints 1 to 6
-        #self.action_space = Box(low=np.array([-math.pi]*6), high=np.array([+math.pi]*6), dtype=np.float32)
+        # Actions: (dx, dy, dz) for end-effector displacement 
         self.action_space = Box(low=np.array([-0.1]*3), high=np.array([+0.1]*3), dtype=np.float32)
 
         self.robot = UR5Robotiq85((0, 0, 0), (0, 0, 0))
 
-        # define environment        
+        # Define environment        
         self.physicsClient = p.connect(p.GUI if self.visualize else p.DIRECT)
         p.setAdditionalSearchPath(pybullet_data.getDataPath())
         p.setGravity(0, 0, -9.8)
@@ -158,7 +155,7 @@ class CubesPush(Env):
             # Dense reward: the distance between the cubes
             cube1_pos = self.get_cube_pose(self.cubes[0])[:3]
             cube2_pos = self.get_cube_pose(self.cubes[1])[:3]
-            distance = np.linalg.norm(np.array(cube1_pos) - np.array(cube2_pos))
+            distance = float(np.linalg.norm(np.array(cube1_pos) - np.array(cube2_pos)))
 
             reward += geometric_distance_reward(distance, self.positive_reward_radius, 0.5) / 10
 
@@ -227,10 +224,9 @@ class CubesPush(Env):
     def close(self):
         p.disconnect(self.physicsClient)
 
-    def create_cube(self, x: float, y: float, z: float, color:list=None):
+    def create_cube(self, x: float, y: float, z: float, color:list=[1,1,1,1]):
         id = p.loadURDF("cube.urdf", [x, y, z], p.getQuaternionFromEuler([0, 0, 0]), useFixedBase=False, globalScaling = 0.04)
-        if color != None:
-            p.changeVisualShape(id, -1, rgbaColor=color)
+        p.changeVisualShape(id, -1, rgbaColor=color)
         self.cubes.append(id)
 
     def create_cubes(self):
