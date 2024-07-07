@@ -3,6 +3,7 @@ import math
 import numpy as np
 from typing import NoReturn, Optional
 import random
+import os
 
 from gymnasium import Env
 from gymnasium.spaces import Box
@@ -60,22 +61,26 @@ class CubesPush(Env):
         # Actions: (dx, dy, dz) for end-effector displacement 
         self.action_space = Box(low=np.array([-0.1]*3), high=np.array([+0.1]*3), dtype=np.float32)
 
-        self.robot = UR5Robotiq85((0, 0, 0), (0, 0, 0))
-
         # Define environment        
         self.physicsClient = p.connect(p.GUI if self.visualize else p.DIRECT)
         p.setAdditionalSearchPath(pybullet_data.getDataPath())
         p.setGravity(0, 0, -9.8)
 
+        # Reorient the debug camera
+        p.resetDebugVisualizerCamera(cameraDistance=1.8, cameraYaw=50, cameraPitch=-25, cameraTargetPosition=[-0.5,+0.2,0])
+
         # Hide right and left menus
         p.configureDebugVisualizer(p.COV_ENABLE_GUI,0)
 
-        # Reorient the debug camera
-        p.resetDebugVisualizerCamera(cameraDistance=1.8, cameraYaw=50, cameraPitch=-25, cameraTargetPosition=[-0.5,+0.2,0])
-        self.planeID = p.loadURDF("plane.urdf")
+        # Robot will be centered at the origin (0,0,0), the plane and the table will be below z=0
+        table_dimensions = [1.0, 2.0, 0.5]
+        self.planeID = p.loadURDF("plane.urdf", [0, 0, -table_dimensions[2]])
+        self.table_id = self.create_table_block(table_dimensions, [0, 0, -table_dimensions[2]/2], color=[0.5, 0.5, 0.5, 1])
+
+        self.robot = UR5Robotiq85((0, 0, 0), (0, 0, 0))
 
         self.robot.load()
-        self.robot.step_simulation = self.step_simulation
+        self.robot.step_simulation = self.step_simulation # type: ignore
         self.control_method = 'end'
 
         self.cubes = []
@@ -256,3 +261,36 @@ class CubesPush(Env):
             baseVisualShapeIndex=visual_shape_id,
             basePosition=[center_x, center_y, 0.0001]  # Slightly above the ground to avoid z-fighting
         )
+
+    def create_table_block(self, size, position, color=[1, 0, 0, 1]):
+        """
+        Create a block in the PyBullet simulation.
+
+        Args:
+        - size: A list of three floats representing the half extents of the block [x, y, z].
+        - position: A list of three floats representing the position of the block [x, y, z].
+        - color: A list of four floats representing the RGBA color of the block.
+
+        Returns:
+        - block_body_id: The ID of the created block.
+        """
+        block_visual_shape_id = p.createVisualShape(shapeType=p.GEOM_BOX,
+                                                    rgbaColor=color,
+                                                    halfExtents=[size[0]/2, size[1]/2, size[2]/2])
+        block_collision_shape_id = p.createCollisionShape(shapeType=p.GEOM_BOX,
+                                                        halfExtents=[size[0]/2, size[1]/2, size[2]/2])
+        block_body_id = p.createMultiBody(baseMass=0,
+                                        baseCollisionShapeIndex=block_collision_shape_id,
+                                        baseVisualShapeIndex=block_visual_shape_id,
+                                        basePosition=position)  
+        
+        # Load the texture
+        script_dir = os.path.dirname(__file__)
+        texture_path = os.path.join(script_dir, "../meshes/textures/steel.jpg")
+ 
+        texture_id = p.loadTexture(texture_path)
+
+        # Apply the texture to the block
+        p.changeVisualShape(block_body_id, -1, textureUniqueId=texture_id)
+
+        return block_body_id
