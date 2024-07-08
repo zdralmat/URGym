@@ -225,7 +225,7 @@ def is_pointing_downwards(qx, qy, qz, qw, threshold=1e-1):
     return z_alignment_distance(qx, qy, qz, qw) <= threshold
 
 
-def z_alignment_distance(qx, qy, qz, qw):
+def _z_alignment_distance(qx, qy, qz, qw):
     # If aligned in z direction downwards:
     # qx = -qz and qy = qw
 
@@ -239,3 +239,48 @@ def z_alignment_distance(qx, qy, qz, qw):
     
     # Return the scaled difference
     return scaled_difference
+
+def z_alignment_distance(roll, pitch, yaw):
+    
+    # The ideal downward direction vector
+    downward = np.array([0, 0, -1])
+    
+    # Calculate the rotation matrix from Euler angles
+    Rx = np.array([
+        [1, 0, 0],
+        [0, np.cos(roll), -np.sin(roll)],
+        [0, np.sin(roll), np.cos(roll)]
+    ])
+    
+    Ry = np.array([
+        [np.cos(pitch), 0, np.sin(pitch)],
+        [0, 1, 0],
+        [-np.sin(pitch), 0, np.cos(pitch)]
+    ])
+    
+    Rz = np.array([
+        [np.cos(yaw), -np.sin(yaw), 0],
+        [np.sin(yaw), np.cos(yaw), 0],
+        [0, 0, 1]
+    ])
+    
+    # Combined rotation matrix
+    R = Rz @ Ry @ Rx
+    
+    # Rotate the downward direction vector
+    rotated_downward = R @ downward
+    
+    # Compute the cosine of the angle between the vectors
+    dot_product = np.dot(rotated_downward, downward)
+    magnitude_rotated_downward = np.linalg.norm(rotated_downward)
+    magnitude_downward = np.linalg.norm(downward)
+    
+    cos_theta = dot_product / (magnitude_rotated_downward * magnitude_downward)
+    
+    # Compute the angle in radians
+    theta = np.arccos(np.clip(cos_theta, -1.0, 1.0))
+    
+    # Normalize the angle to the range [0, 1]
+    normalized_theta = theta / np.pi
+    
+    return normalized_theta

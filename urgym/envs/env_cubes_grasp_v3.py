@@ -147,6 +147,8 @@ class CubesGrasp(Env):
             else:
                 self.robot.close_gripper() 
                 self.wait_until_stable()
+                print("Vertical alignment: ", z_alignment_distance(*p.getEulerFromQuaternion(self.robot.get_ee_pose()[3:])))
+
 
         reward += self.update_reward()
         info = {'is_success': False}
@@ -167,7 +169,8 @@ class CubesGrasp(Env):
                 reward += 5
                 # Additional bonus reward based on vertical alignment, if configured
                 if self.vertical_reward:
-                    vertical_alignment = z_alignment_distance(*self.robot.get_ee_pose()[3:])
+                    #vertical_alignment = z_alignment_distance(*self.robot.get_ee_pose()[3:])
+                    vertical_alignment = z_alignment_distance(*p.getEulerFromQuaternion(self.robot.get_ee_pose()[3:]))
                     reward += geometric_distance_reward(vertical_alignment, 0.15, 0.3)*2
 
         elif self.subgoals_achieved['approached'] and self.subgoals_achieved['grasped']: 
@@ -274,12 +277,16 @@ class CubesGrasp(Env):
 
         obs_robot.update(self.robot.get_joint_obs())
 
+        # Version based on object approached and grasped, works worse, need to review
         """approached = self.object_approached(self.target_id)
         grasped = self.object_grasped(self.target_id)
         if grasped: # If grasped, we also consider it as approached, altough the gripper may be almost closed
             approached = True
         obs = np.array([int(s) for s in [approached, grasped]]) # Boolean to int (0,1)"""
-        obs = np.array([int(s) for s in list(self.subgoals_achieved.values())]) # Boolean to int (0,1) Version based on subgoals achieved
+
+        # Version based on subgoals achieved, works better
+        obs = np.array([int(s) for s in list(self.subgoals_achieved.values())]) # Boolean to int (0,1) 
+
         obs = np.append(obs, obs_robot["ee_pos"])
         obs = np.append(obs, self.get_gripper_opening_length())
         obs = np.append(obs, self.get_cube_pose(self.target_id))
@@ -444,6 +451,11 @@ class CubesGrasp(Env):
  
 if __name__ == "__main__":
     env = CubesGrasp()
+    p.loadURDF("cube.urdf", [0.1, -0.2, 1], p.getQuaternionFromEuler([0, 0, 0]), useFixedBase=False, globalScaling = 0.1)
+    env.wait_simulation_steps(480)
+    p.loadURDF("cube.urdf", [0.1, -0.2, 1], p.getQuaternionFromEuler([0, 0, 0]), useFixedBase=False, globalScaling = 0.05)
+    env.wait_simulation_steps(480)
+    time.sleep(10)
     for _ in range(50):
         obs = env.reset()
         time.sleep(3)
