@@ -1,26 +1,52 @@
-from sre_compile import dis
 import time
 import math
-from turtle import position
 import numpy as np
-from typing import Optional
-import os
+from typing import NoReturn, Optional
 import random
+import os
 
 from gymnasium import Env
 from gymnasium.spaces import Box
-from gymnasium.envs.registration import register
 
 import pybullet as p
 import pybullet_data
-from urgym.utilities import YCBModels, Models, Camera, rotate_quaternion, geometric_distance_reward
-from urgym.robot import Panda, UR5Robotiq85, UR5Robotiq140
+from urgym.utilities import rotate_quaternion, geometric_distance_reward
+from urgym.robot import UR5Robotiq85
 
 class CubesPush(Env):
+    """
+    Reinforcement learning environment for pushing two cubes with a robot arm.
+
+    Observation Space:
+    The observation space ha s9 items consisting of the end-effector position (x, y, z) and the position (x, y, z) of the two cubes.
+    All the coordinates (x, y, z) are within bounds [-1.0, +1.0]
+
+    Action Space:
+    The action space consists of the desired end-effector displacement (dx, dy, dz) within bounds [-0.1, +0.1]
+    The end-effector orientation is always vertical pointing down.
+
+    Rewards:
+    The environment provides different rewards.
+    - Touch reward: If the robot touches the cube with its fingers, a reward of +0.1 is given.
+    - Distance reward: Based on the distance between the two cubes, as follows:
+        -0.1 if the distance is greater than 0.5, cubes are far away.
+        [-0.1, 0] if the distance is between 0.5 and 0.1.
+        [0, 0.1] if the distance is between 0.1 and 0.05.
+    - Success reward: If the distance between the two cubes is less than 0.05 (close contact), a reward of 10 is given.
+    - Collision penalty: A penalty of -0.01 is given if the robot collides with the floor.
+    - Time penalty: A penalty of -0.1 is given at each step.
+    """
 
     SIMULATION_STEP_DELAY = 1 / 240.
 
     def __init__(self, camera=None, reward_type='dense',  render_mode='human') -> None:
+        """
+        Initialize the CubesPush environment.
+
+        Parameters:
+        - reward_type (str): The type of reward to use. Options are 'dense' and 'sparse'. Default is 'dense'.
+        - render_mode (str): The rendering mode. Options are 'human' and 'non-human'. Default is 'human'.
+        """
 
         self.reward_type = reward_type
 
@@ -30,49 +56,38 @@ class CubesPush(Env):
             self.visualize = False
 
         # Set observation and action spaces
-        # Observations: the end-effector position and quaternion (x, y, z, qx, qy, qz, qw)
-        # And position (x, y, z) of the two cubes
-        self.observation_space = Box(low=np.array([-1.0]*3 + [-math.pi]*4 + [-1.0]*6), high=np.array([1.0]*3 + [math.pi]*4 + [1.0]*6), dtype=np.float64)
-        # Actions: joints 1 to 6
-        self.action_space = Box(low=np.array([-math.pi]*6), high=np.array([+math.pi]*6), dtype=np.float32)
+        # Observations: the end-effector position and position (x, y, z) of the two cubes
+        self.observation_space = Box(low=np.array([-1.0]*3 + [-1.0]*6), high=np.array([1.0]*3 + [1.0]*6), dtype=np.float64)
+        # Actions: (dx, dy, dz) for end-effector displacement 
+        self.action_space = Box(low=np.array([-0.1]*3), high=np.array([+0.1]*3), dtype=np.float32)
 
-        current_dir = os.path.dirname(__file__)
-        ycb_models = YCBModels(
-            os.path.join(current_dir, './data/ycb', '**', 'textured-decmp.obj'),
-        )
-        """camera = Camera((1, 1, 1),
-                        (0, 0, 0),
-                        (0, 0, 1),
-                        0.1, 5, (320, 320), 40)"""
-        self.camera = camera
-        # robot = Panda((0, 0.5, 0), (0, 0, math.pi))
-        self.robot = UR5Robotiq85((0, 0.5, 0), (0, 0, 0))
-
-        # define environment        
+        # Define environment        
         self.physicsClient = p.connect(p.GUI if self.visualize else p.DIRECT)
         p.setAdditionalSearchPath(pybullet_data.getDataPath())
-        p.setGravity(0, 0, -10)
+        p.setGravity(0, 0, -9.8)
+
+        # Reorient the debug camera
+        p.resetDebugVisualizerCamera(cameraDistance=1.8, cameraYaw=50, cameraPitch=-25, cameraTargetPosition=[-0.5,+0.2,0])
+
         # Hide right and left menus
         p.configureDebugVisualizer(p.COV_ENABLE_GUI,0)
-        # Reorient the debug camera
-        p.resetDebugVisualizerCamera(cameraDistance=2, cameraYaw=50, cameraPitch=-25, cameraTargetPosition=[-0.5,+0.5,0])
-        self.planeID = p.loadURDF("plane.urdf")
+
+        # Robot will be centered at the origin (0,0,0), the plane and the table will be below z=0
+        table_dimensions = [1.0, 2.0, 0.5]
+        self.planeID = p.loadURDF("plane.urdf", [0, 0, -table_dimensions[2]])
+        self.table_id = self.create_table_block(table_dimensions, [0, 0, -table_dimensions[2]/2], color=[0.5, 0.5, 0.5, 1])
+
+        self.robot = UR5Robotiq85((0, 0, 0), (0, 0, 0))
 
         self.robot.load()
-        self.robot.step_simulation = self.step_simulation
-        self.control_method = 'joint'
-
-        # custom sliders to tune parameters (name of the parameter,range,initial value)
-        self.xin = p.addUserDebugParameter("x", -0.224, 0.224, 0)
-        self.yin = p.addUserDebugParameter("y", -0.224, 0.224, 0)
-        self.zin = p.addUserDebugParameter("z", 0, 1., 0.5)
-        self.rollId = p.addUserDebugParameter("roll", -3.14, 3.14, 0)
-        self.pitchId = p.addUserDebugParameter("pitch", -3.14, 3.14, np.pi/2)
-        self.yawId = p.addUserDebugParameter("yaw", -np.pi/2, np.pi/2, np.pi/2)
-        self.gripper_opening_length_control = p.addUserDebugParameter("gripper_opening_length", 0, 0.085, 0.04)
+        self.robot.step_simulation = self.step_simulation # type: ignore
+        self.control_method = 'end'
 
         self.cubes = []
+        self.positive_reward_radius = 0.1
 
+        # Draw a green circle around the target cube
+        self.draw_circle_area(radius=self.positive_reward_radius)
 
     def step_simulation(self):
         """
@@ -82,48 +97,50 @@ class CubesPush(Env):
         if self.visualize:
             time.sleep(self.SIMULATION_STEP_DELAY)
 
-    def read_debug_parameter(self):
-        # read the value of task parameter
-        x = p.readUserDebugParameter(self.xin)
-        y = p.readUserDebugParameter(self.yin)
-        z = p.readUserDebugParameter(self.zin)
-        roll = p.readUserDebugParameter(self.rollId)
-        pitch = p.readUserDebugParameter(self.pitchId)
-        yaw = p.readUserDebugParameter(self.yawId)
-        gripper_opening_length = p.readUserDebugParameter(self.gripper_opening_length_control)
-
-        return x, y, z, roll, pitch, yaw, gripper_opening_length
-
     def wait_simulation_steps(self, sim_steps):
         for _ in range(sim_steps):
             self.step_simulation()
 
+    def wait_until_stable(self, sim_steps=480):
+        pos = self.robot.get_joint_obs()['positions']
+        for _ in range(sim_steps):
+            self.step_simulation()
+            new_pos = self.robot.get_joint_obs()['positions']
+            if np.sum(np.abs(np.array(pos)-np.array(new_pos))) < 5e-3: # Threshold based on experience
+                return True
+            pos = new_pos
+        print("Warning: The robot configuration did not stabilize")
+        return False
+
     def step(self, action):
         """
-        action: (x, y, z, roll, pitch, yaw, gripper_opening_length) for End Effector Position Control
-                (a1, a2, a3, a4, a5, a6, a7, gripper_opening_length) for Joint Position Control
-        control_method:  'end' for end effector position control
-                         'joint' for joint position control
+        action: (dx, dy, dz) for End-Effector Displacement Control
         """
 
         reward = 0
-
-        #new_pose = self.robot.get_ee_pose() + action
         
-        """# Differential version
-        joints = self.robot.get_joint_states()
-        joints += action
-        self.robot.move_ee(joints, self.control_method)
-        """
+        # Differential version
+        ee_pose = list(self.robot.get_ee_pose())
+        ee_pose[:3] += action
+        ee_pose[3:] = self.vertical_quaternion # to keep the end effector vertical at all times
+        self.robot.move_ee(ee_pose, self.control_method)
 
-        self.robot.move_ee(action, self.control_method)
-
-        self.wait_simulation_steps(120)
-            
-        reward, success = self.update_reward()
+        self.wait_until_stable()
+                
+        if self.is_floor_collision():
+            reward -= 0.01
+            success = False
+            terminated = False
+        elif self.touched_with_fingers(self.cubes[1]):
+            reward, success = self.update_reward()
+            reward += 0.1 # Reward for touching the cube
+            print("Touched!")
+            terminated = success
+        else:
+            success = False
+            terminated = False
 
         info = {"is_success": success}
-        terminated = success
 
         if success:
             print("SUCCESS!")
@@ -143,9 +160,9 @@ class CubesPush(Env):
             # Dense reward: the distance between the cubes
             cube1_pos = self.get_cube_pose(self.cubes[0])[:3]
             cube2_pos = self.get_cube_pose(self.cubes[1])[:3]
-            distance = np.linalg.norm(np.array(cube1_pos) - np.array(cube2_pos))
+            distance = float(np.linalg.norm(np.array(cube1_pos) - np.array(cube2_pos)))
 
-            reward += geometric_distance_reward(distance, 0.1, 0.5) / 10
+            reward += geometric_distance_reward(distance, self.positive_reward_radius, 0.5) / 10
 
         # Sparse reward: if the distance between the cubes is less than 0.05
         if self.are_cubes_close(self.cubes[0], self.cubes[1], 0.05):
@@ -156,33 +173,37 @@ class CubesPush(Env):
 
         return reward, sucess
     
+    def is_floor_collision(self):
+        contact_points = p.getContactPoints(bodyA=self.robot.id, bodyB=self.planeID)
+        if contact_points:
+            for point in contact_points:
+                if point[3] != 0: # 0 is the base link, is always touching the floor
+                    print("Collision with the floor!")
+                    return True
+        return False
+
+    def touched_with_fingers(self, object_id):
+        contact_points = p.getContactPoints(object_id, self.robot.id)
+        fingers_indices = list(range(9, 19))
+        contact_with_links = any(
+            point[4] in fingers_indices or  point[3] in fingers_indices
+            for point in contact_points
+        )
+        if contact_with_links:
+            return True
+        return False
+
     def are_cubes_close(self, cube1_id, cube2_id, threshold=0.05):
         cube1_pos = self.get_cube_pose(cube1_id)[:3]
         cube2_pos = self.get_cube_pose(cube2_id)[:3]
         distance = np.linalg.norm(np.array(cube1_pos) - np.array(cube2_pos))
         return distance < threshold
     
-    def on_top(self, lower_cube_id, upper_cube_id):
-        lower_cube_pos, _ = p.getBasePositionAndOrientation(lower_cube_id)
-        upper_cube_pos, _ = p.getBasePositionAndOrientation(upper_cube_id)
-        contact_points = p.getContactPoints(lower_cube_id, upper_cube_id)
-        # Check if the upper cube is placed on top of the lower cube
-        if upper_cube_pos[2] > lower_cube_pos[2] and contact_points:
-            print(f"Cube {upper_cube_id} is placed on top of cube {lower_cube_id} and in contact")
-            return True
-        return False
-
     def get_observation(self):
         obs = dict()
-        if isinstance(self.camera, Camera):
-            rgb, depth, seg = self.camera.shot()
-            obs.update(dict(rgb=rgb, depth=depth, seg=seg))
-        else:
-            assert self.camera is None
-
         obs.update(self.robot.get_joint_obs())
 
-        obs = np.array(obs["ee_pos"])
+        obs = np.array(obs["ee_pos"])[:3]
         cube1_position = self.get_cube_pose(self.cubes[0])[:3]
         cube2_position = self.get_cube_pose(self.cubes[1])[:3]
         obs = np.append(obs, [cube1_position, cube2_position])
@@ -194,38 +215,82 @@ class CubesPush(Env):
         self.create_cubes()
 
         # Position the end effector above the cube
-        new_pose = list(self.get_cube_pose(self.cubes[0]))
-        new_pose[2] += 0.3 # A little bit higher
-        new_pose[3:] = rotate_quaternion(new_pose[3:], math.pi/2, [1, 0, 0]) # Reorient the end effector
+        new_pose = list(self.get_cube_pose(self.cubes[1]))
+        new_pose[2] += 0.2 # A little bit higher
         new_pose[3:] = rotate_quaternion(new_pose[3:], math.pi/2, [0, 1, 0]) # Reorient the end effector
+        self.vertical_quaternion = new_pose[3:]
+
         self.robot.move_ee(new_pose, 'end')
         self.robot.close_gripper()
-        self.wait_simulation_steps(120)
+        self.wait_until_stable()
 
         return self.get_observation(), {}
 
     def close(self):
         p.disconnect(self.physicsClient)
 
-    def create_cube(self, x: float, y: float, z: float, color:list=None):
+    def create_cube(self, x: float, y: float, z: float, color:list=[1,1,1,1]):
         id = p.loadURDF("cube.urdf", [x, y, z], p.getQuaternionFromEuler([0, 0, 0]), useFixedBase=False, globalScaling = 0.04)
-        if color != None:
-            p.changeVisualShape(id, -1, rgbaColor=color)
+        p.changeVisualShape(id, -1, rgbaColor=color)
         self.cubes.append(id)
 
     def create_cubes(self):
         for id in self.cubes:
             p.removeBody(id)
         self.cubes = []
-        coors = [random.uniform(-0.3, -0.1) + (0.4 if random.random() > 0.5 else 0) for _ in range(4)]
 
-        self.create_cube(coors[0], coors[1], 0.2)
-        self.create_cube(coors[2], coors[3], 0.2, [1,0,0,1]) 
-        #self.create_cube(0.1, -0.1, 0.1, [0,0,1,1])
-        #self.create_cube(0.1, -0.2, 0.1, [0,1,0,1])
+        # Create target cube
+        self.create_cube(0.0, -0.5, 0.1)
+        # Create second cube
+        x = random.uniform(-0.1, +0.1)
+        self.create_cube(x, -0.7, 0.1, [1,0,0,1])
 
     def get_cube_pose(self, cube_id):
         position, orientation = p.getBasePositionAndOrientation(cube_id)
         pose = position + orientation
         return pose
     
+    def draw_circle_area(self, radius=0.1, center_x=0.0, center_y=-0.5, segments=100, color=[0, 1.0, 0, 0.4]):
+        visual_shape_id = p.createVisualShape(
+            shapeType=p.GEOM_CYLINDER,
+            radius=radius,
+            length=0.001,  # Very thin to act as a visual aid
+            rgbaColor=color
+        )
+        p.createMultiBody(
+            baseVisualShapeIndex=visual_shape_id,
+            basePosition=[center_x, center_y, 0.0001]  # Slightly above the ground to avoid z-fighting
+        )
+
+    def create_table_block(self, size, position, color=[1, 0, 0, 1]):
+        """
+        Create a block in the PyBullet simulation.
+
+        Args:
+        - size: A list of three floats representing the half extents of the block [x, y, z].
+        - position: A list of three floats representing the position of the block [x, y, z].
+        - color: A list of four floats representing the RGBA color of the block.
+
+        Returns:
+        - block_body_id: The ID of the created block.
+        """
+        block_visual_shape_id = p.createVisualShape(shapeType=p.GEOM_BOX,
+                                                    rgbaColor=color,
+                                                    halfExtents=[size[0]/2, size[1]/2, size[2]/2])
+        block_collision_shape_id = p.createCollisionShape(shapeType=p.GEOM_BOX,
+                                                        halfExtents=[size[0]/2, size[1]/2, size[2]/2])
+        block_body_id = p.createMultiBody(baseMass=0,
+                                        baseCollisionShapeIndex=block_collision_shape_id,
+                                        baseVisualShapeIndex=block_visual_shape_id,
+                                        basePosition=position)  
+        
+        # Load the texture
+        script_dir = os.path.dirname(__file__)
+        texture_path = os.path.join(script_dir, "../meshes/textures/steel.jpg")
+ 
+        texture_id = p.loadTexture(texture_path)
+
+        # Apply the texture to the block
+        p.changeVisualShape(block_body_id, -1, textureUniqueId=texture_id)
+
+        return block_body_id

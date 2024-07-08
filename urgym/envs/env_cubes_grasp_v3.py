@@ -366,7 +366,7 @@ class CubesGrasp(Env):
         # Convert polar coordinates to Cartesian coordinates
         x = r * math.cos(theta)
         y = r * math.sin(theta)
-        
+
         self.create_cube(x, y, 0.1, [1,0,0,1])
         #self.create_cube(0.0, -0.2, 0.1, [1,0,0,1])
         #self.create_cube(0.1, -0.1, 0.1, [0,0,1,1])

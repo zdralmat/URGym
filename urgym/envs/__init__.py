@@ -7,13 +7,17 @@ register(
     kwargs=dict(button_touch_mode='any')
 )
 
-
 register(
     id='URGym/CubesPush-v0',
     entry_point='urgym.envs.env_cubes_push_v0:CubesPush',
     max_episode_steps=50,
 )
 
+register(
+    id='URGym/CubesPush-v1',
+    entry_point='urgym.envs.env_cubes_push_v1:CubesPush',
+    max_episode_steps=50,
+)
 
 register(
     id='URGym/CubesGrasp-v0',
@@ -27,6 +31,7 @@ register(
     max_episode_steps=20,
 )
 
+#
 register(
     id='URGym/CubesGrasp-v2',
     entry_point='urgym.envs.env_cubes_grasp_v2:CubesGrasp',
