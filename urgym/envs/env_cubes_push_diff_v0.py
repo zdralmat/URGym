@@ -18,7 +18,7 @@ class CubesPush(Env):
     Reinforcement learning environment for pushing two cubes with a robot arm.
 
     Observation Space:
-    The observation space has 9 items consisting of the end-effector position (x, y, z) and the position (x, y, z) of the two cubes.
+    The observation space has 9 items consisting of the end-effector position (x, y, z) and the position differences (dx, dy, dz) between the end-effector and the two cubes.
     All the coordinates (x, y, z) are within bounds [-1.0, +1.0]
 
     Action Space:
@@ -206,7 +206,9 @@ class CubesPush(Env):
         obs = np.array(obs["ee_pos"])[:3]
         cube1_position = self.get_cube_pose(self.cubes[0])[:3]
         cube2_position = self.get_cube_pose(self.cubes[1])[:3]
-        obs = np.append(obs, [cube1_position, cube2_position])
+        cube1_diff = np.array(cube1_position) - np.array(obs)
+        cube2_diff = np.array(cube2_position) - np.array(obs)
+        obs = np.append(obs, [cube1_diff, cube2_diff])
         return obs
 
     def reset(self, *, seed: Optional[int] = None, options: Optional[dict] = None):

@@ -14,8 +14,8 @@ register(
 )
 
 register(
-    id='URGym/CubesPush-v1',
-    entry_point='urgym.envs.env_cubes_push_v1:CubesPush',
+    id='URGym/CubesPushDiff-v0',
+    entry_point='urgym.envs.env_cubes_push_diff_v0:CubesPush',
     max_episode_steps=50,
 )
 
