@@ -100,11 +100,15 @@ class RobotBase(object):
     def reset_gripper(self):
         self.open_gripper()
 
-    def open_gripper(self):
-        self.move_gripper(self.gripper_range[1])
+    def open_gripper(self, percentage=100):
+        assert 0 <= percentage <= 100
+        open_length = self.gripper_range[0] + (self.gripper_range[1] - self.gripper_range[0]) * (percentage / 100)
+        self.move_gripper(open_length)
 
-    def close_gripper(self):
-        self.move_gripper(self.gripper_range[0])
+    def close_gripper(self, percentage=100):
+        assert 0 <= percentage <= 100
+        close_length = self.gripper_range[1] - (self.gripper_range[1] - self.gripper_range[0]) * (percentage / 100)
+        self.move_gripper(close_length)
 
     def move_ee(self, action, control_method):
         assert control_method in ('joint', 'end')

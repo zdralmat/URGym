@@ -31,7 +31,8 @@ def objective(trial: optuna.Trial):
     gamma = trial.suggest_float('gamma', *hyperparameters['gamma'])
     tau = trial.suggest_float('tau', *hyperparameters['tau'])
     batch_size = trial.suggest_categorical('batch_size', hyperparameters['batch_size'])
-    gradient_steps = trial.suggest_categorical('gradient_steps', hyperparameters['gradient_steps'])
+    #gradient_steps = trial.suggest_categorical('gradient_steps', hyperparameters['gradient_steps'])
+    gradient_steps = 1 # Fixed to 1
     use_sde = trial.suggest_categorical('use_sde', hyperparameters['use_sde'])
     net_arch_nodes = trial.suggest_categorical('net_arch_nodes', hyperparameters['net_arch_nodes']) 
 
