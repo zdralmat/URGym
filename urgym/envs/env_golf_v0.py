@@ -137,10 +137,7 @@ class Golf(Env):
         ball_position = self.get_ball_position()
         stick_position = self.get_stick_pose()[:3]
 
-        if ball_position[2] < stick_position[2]:
-            terminated = True
-        else:
-            terminated = False
+        terminated = False
 
         return self.get_observation(), reward, terminated, truncated, {}
 
@@ -163,7 +160,7 @@ class Golf(Env):
         if self.ball_id is not None:
             p.removeBody(self.ball_id)
 
-        new_pose = [0.0, -0.60, 0.60, 0.50, -0.50, -0.50, 0.50]
+        new_pose = [0.0, -0.60, 0.40, 0.0, 0.0, -0.70, 0.70]
 
         self.robot.move_ee(new_pose, 'end')
         self.robot.open_gripper(20)
@@ -171,9 +168,9 @@ class Golf(Env):
 
         pose = np.array(self.robot.get_joint_obs()['ee_pos'][:3])
         gripper_center = self.get_gripper_geometrical_center()
-        pose[1] -= 0.2
-        pose[2] = gripper_center[2]
-        self.create_balance_stick(pose)
+        pose[:3] = deepcopy(gripper_center)
+        pose[2] -= 0.05
+        self.stick_id = self.create_stick(pose)
         self.ball_id = self.create_ball()
 
         self.robot.close_gripper()
@@ -184,23 +181,100 @@ class Golf(Env):
     def close(self):
         p.disconnect(self.physicsClient)
 
-    def create_balance_stick(self, base_position):
+    def create_stick(self, base_position):
         # Create a rectangular collision shape
-        collision_shape = p.createCollisionShape(shapeType=p.GEOM_BOX, halfExtents=[0.05, 0.1, 0.005])
+        dimensions = np.array([0.03, 0.03, 0.2])
+        collision_shape = p.createCollisionShape(shapeType=p.GEOM_BOX, halfExtents=dimensions/2)
         
         # Create a visual shape (optional, for better visualization)
-        visual_shape = p.createVisualShape(shapeType=p.GEOM_BOX, halfExtents=[0.05, 0.1, 0.005], rgbaColor=[1, 0.5, 0, 1])
+        visual_shape = p.createVisualShape(shapeType=p.GEOM_BOX, halfExtents=dimensions/2, rgbaColor=[1, 0.5, 0, 1])
         
         # Create the multi-body using the collision shape and visual shape
         base_mass = 0.1  # mass of the object
-        self.stick_id = p.createMultiBody(base_mass, collision_shape, visual_shape, base_position, [0, 0, 0, 1])
+        stick_id = p.createMultiBody(base_mass, collision_shape, visual_shape, base_position, [0, 0, 0, 1])
+
+        return stick_id
+
+
+    def create_stick2(self, position):
+        # Load the mesg
+        script_dir = os.path.dirname(__file__)
+        pitch_path = os.path.join(script_dir, "../meshes/golf_club/golf_club.obj")
+
+        # Create collision shape from the mesh
+        collision_shape_id = p.createCollisionShape(shapeType=p.GEOM_MESH, fileName=pitch_path, meshScale=[0.005, 0.005, 0.005])
+
+        # Create visual shape from the mesh
+        visual_shape_id = p.createVisualShape(shapeType=p.GEOM_MESH, fileName=pitch_path, meshScale=[0.005, 0.005, 0.005])
+
+        # Create the multi-body with the collision and visual shapes
+        body_id = p.createMultiBody(baseMass=1.0,
+                                    baseCollisionShapeIndex=collision_shape_id,
+                                    baseVisualShapeIndex=visual_shape_id,
+                                    basePosition=position)  # Adjust the position as needed
+        
+        time.sleep(5)
+
+        # Create a fixed constraint between the gripper and the object
+        gripper_link_index = 8
+        gripper_pos, gripper_orn = p.getLinkState(self.robot.id, gripper_link_index)[:2]
+
+        """p.createConstraint(
+            parentBodyUniqueId=self.robot.id,
+            parentLinkIndex=gripper_link_index,
+            childBodyUniqueId=body_id,
+            childLinkIndex=-1,  # -1 means the base of the object
+            jointType=p.JOINT_FIXED,
+            jointAxis=[0, 0, 0],
+            parentFramePosition=position,
+            childFramePosition=gripper_pos,
+            childFrameOrientation=gripper_orn
+        )"""
+        
+        return body_id
+
+    def create_stick2(self, base_position, height=0.3, radius=0.01):
+        """
+        Creates a vertical stick in PyBullet with the specified height and radius.
+        
+        Parameters:
+        - height (float): The height of the stick.
+        - radius (float): The radius of the stick.
+        """
+
+        # Define the shape of the stick (cylinder)
+        stick_visual_shape_id = p.createVisualShape(
+            shapeType=p.GEOM_CYLINDER,
+            radius=radius,
+            length=height,
+            visualFramePosition=[0, 0, height / 2],
+            rgbaColor=[0.1, 0.1, 0.1, 1]
+        )
+        
+        # Create a collision shape for the stick
+        stick_collision_shape_id = p.createCollisionShape(
+            shapeType=p.GEOM_CYLINDER,
+            radius=radius,
+            height=height,
+            collisionFramePosition=[0, 0, height / 2]
+        )
+        
+        # Create the multi-body for the stick
+        stick_body_id = p.createMultiBody(
+            baseMass=0.5,
+            baseCollisionShapeIndex=stick_collision_shape_id,
+            baseVisualShapeIndex=stick_visual_shape_id,
+            basePosition=base_position
+        )
+        
+        return stick_body_id
 
     def create_ball(self, radius=0.015):
         # Get the position and orientation of the stick
         stick_position, stick_orientation = p.getBasePositionAndOrientation(self.stick_id)
         
         # Calculate the ball position (centered on top of the stick)
-        ball_position = [stick_position[0], stick_position[1], stick_position[2] + 0.2 + radius]
+        ball_position = [stick_position[0], stick_position[1], 0.2]
         # Randomize the ball position a little bit
         ball_position[0] += random.uniform(-0.03, 0.03)
         ball_position[1] += random.uniform(-0.08, 0.02)
@@ -271,12 +345,26 @@ class Golf(Env):
         visual_shape_id = p.createVisualShape(shapeType=p.GEOM_MESH, fileName=pitch_path, rgbaColor=[0.1, 0.6, 0, 1], specularColor=[0, 0, 0])
 
         # Create the multi-body with the collision and visual shapes
-        body_id = p.createMultiBody(baseMass=1.0,
+        body_id = p.createMultiBody(baseMass=10.0,
                                     baseCollisionShapeIndex=collision_shape_id,
                                     baseVisualShapeIndex=visual_shape_id,
                                     basePosition=position)  # Adjust the position as needed
-
+        
         return body_id
+
+
+    def draw_circle_area(self, radius=0.1, center_x=0.0, center_y=-0.5, center_z=0.0001, segments=100, color=[0, 1.0, 0, 0.4]):
+        visual_shape_id = p.createVisualShape(
+            shapeType=p.GEOM_CYLINDER,
+            radius=radius,
+            length=0.001,  # Very thin to act as a visual aid
+            rgbaColor=color
+        )
+        p.createMultiBody(
+            baseVisualShapeIndex=visual_shape_id,
+            basePosition=[center_x, center_y, center_z]  # Slightly above the ground to avoid z-fighting
+        )
+
 
     def get_gripper_geometrical_center(self):
         """
