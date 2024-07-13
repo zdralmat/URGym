@@ -20,7 +20,6 @@ class TwoBallsBalance(Env):
 
     Observation Space:
     The observation space has 9 items consisting of the end-effector orientation (roll, pitch, yaw) and the position (x, y, z) of the two balls with respect to the paddle.
-    All the items are within bounds [-1.0, +1.0]
 
     Action Space:
     The action space consists of the desired end-effector displacement (droll, dpitch, dyaw) within bounds [-0.1, +0.1]
@@ -49,8 +48,8 @@ class TwoBallsBalance(Env):
             self.visualize = False
 
         # Set observation and action spaces
-        # Observations: the stick quaternion and the two balls position relative the center of the stick
-        self.observation_space = Box(low=np.array([-1.0]*4 + [-1.0]*6), high=np.array([1.0]*4 + [1.0]*6), dtype=np.float64)
+        # Observations: the paddle roll, pitch, yaw and the two balls position relative the center of the paddle
+        self.observation_space = Box(low=np.array([-math.pi]*3 + [-1.0]*6), high=np.array([math.pi]*3 + [1.0]*6), dtype=np.float64)
         # Actions: (dx, dy, dz) for end-effector euler displacement 
         self.action_space = Box(low=np.array([-0.1]*3), high=np.array([+0.1]*3), dtype=np.float32)
 
@@ -77,7 +76,7 @@ class TwoBallsBalance(Env):
         self.robot.step_simulation = self.step_simulation # type: ignore
         self.control_method = 'end'
 
-        self.stick_id = None
+        self.paddle_id = None
         self.ball1_id = None
         self.ball2_id = None
 
@@ -127,9 +126,9 @@ class TwoBallsBalance(Env):
 
         ball1_position = self.get_ball_position(self.ball1_id)
         ball2_position = self.get_ball_position(self.ball2_id)
-        stick_position = self.get_stick_pose()[:3]
+        paddle_position = self.get_paddle_pose()[:3]
 
-        if ball1_position[2] < stick_position[2] or ball2_position[2] < stick_position[2]:
+        if ball1_position[2] < paddle_position[2] or ball2_position[2] < paddle_position[2]:
             terminated = True
         else:
             terminated = False
@@ -141,18 +140,19 @@ class TwoBallsBalance(Env):
         obs = dict()
         obs.update(self.robot.get_joint_obs())
 
-        obs = np.array(self.get_stick_pose()[3:])
-        relative_ball1_position = np.array(self.get_stick_pose()[:3]) - np.array(self.get_ball_position(self.ball1_id))
-        relative_ball2_position = np.array(self.get_stick_pose()[:3]) - np.array(self.get_ball_position(self.ball2_id))
-        obs = np.append(obs, [relative_ball1_position, relative_ball2_position])
+        quaternion = np.array(self.get_paddle_pose()[3:])
+        euler = p.getEulerFromQuaternion(quaternion) # To roll, pitch, yaw
+        relative_ball1_position = np.array(self.get_paddle_pose()[:3]) - np.array(self.get_ball_position(self.ball1_id))
+        relative_ball2_position = np.array(self.get_paddle_pose()[:3]) - np.array(self.get_ball_position(self.ball2_id))
+        obs = np.append(euler, [relative_ball1_position, relative_ball2_position])
         return obs
 
     def reset(self, *, seed: Optional[int] = None, options: Optional[dict] = None):
         super().reset(seed=seed)
         self.robot.reset()
 
-        if self.stick_id is not None:
-            p.removeBody(self.stick_id)
+        if self.paddle_id is not None:
+            p.removeBody(self.paddle_id)
         if self.ball1_id is not None:
             p.removeBody(self.ball1_id)
         if self.ball2_id is not None:
@@ -168,7 +168,7 @@ class TwoBallsBalance(Env):
         gripper_center = self.get_gripper_geometrical_center()
         pose[1] -= 0.2
         pose[2] = gripper_center[2]
-        self.create_balance_stick(pose)
+        self.create_balance_paddle(pose)
         self.ball1_id, self.ball2_id = self.create_balls()
 
         self.robot.close_gripper()
@@ -179,7 +179,7 @@ class TwoBallsBalance(Env):
     def close(self):
         p.disconnect(self.physicsClient)
 
-    def create_balance_stick(self, base_position):
+    def create_balance_paddle(self, base_position):
         # Create a rectangular collision shape
         collision_shape = p.createCollisionShape(shapeType=p.GEOM_BOX, halfExtents=[0.05, 0.1, 0.005])
         
@@ -188,21 +188,21 @@ class TwoBallsBalance(Env):
         
         # Create the multi-body using the collision shape and visual shape
         base_mass = 0.1  # mass of the object
-        self.stick_id = p.createMultiBody(base_mass, collision_shape, visual_shape, base_position, [0, 0, 0, 1])
+        self.paddle_id = p.createMultiBody(base_mass, collision_shape, visual_shape, base_position, [0, 0, 0, 1])
 
     def create_balls(self, radius=0.015):
-        # Get the position and orientation of the stick
-        stick_position, stick_orientation = p.getBasePositionAndOrientation(self.stick_id)
+        # Get the position and orientation of the paddle
+        paddle_position, paddle_orientation = p.getBasePositionAndOrientation(self.paddle_id)
         
-        # Calculate the ball position (centered on top of the stick)
-        ball1_position = [stick_position[0], stick_position[1], stick_position[2] + 0.2 + radius]
-        ball2_position = [stick_position[0], stick_position[1], stick_position[2] + 0.2 - radius]
+        # Calculate the ball position (centered on top of the paddle)
+        ball1_position = [paddle_position[0], paddle_position[1], paddle_position[2] + 0.2 + radius]
+        ball2_position = [paddle_position[0], paddle_position[1], paddle_position[2] + 0.2 - radius]
         # Randomize the balls position a little bit
         ball1_position[0] += random.uniform(-0.03, 0.03)
-        ball1_position[1] += random.uniform(-0.08, -0.045) # Front part of the stick
+        ball1_position[1] += random.uniform(-0.08, -0.045) # Front part of the paddle
         # Randomize the balls position a little bit
         ball2_position[0] += random.uniform(-0.03, 0.03)
-        ball2_position[1] += random.uniform(-0.015, 0.02) # Rear part of the stick
+        ball2_position[1] += random.uniform(-0.015, 0.02) # Rear part of the paddle
 
         # Create a spherical collision shape
         collision_shape = p.createCollisionShape(shapeType=p.GEOM_SPHERE, radius=radius)
@@ -212,13 +212,13 @@ class TwoBallsBalance(Env):
         ball2_visual_shape = p.createVisualShape(shapeType=p.GEOM_SPHERE, radius=radius, rgbaColor=[0, 0, 0, 1.0])
         
         # Create the multi-body using the collision shape and visual shape
-        ball1_body_id = p.createMultiBody(0.01, collision_shape, ball1_visual_shape, ball1_position, stick_orientation)
-        ball2_body_id = p.createMultiBody(0.01, collision_shape, ball2_visual_shape, ball2_position, stick_orientation)
+        ball1_body_id = p.createMultiBody(0.01, collision_shape, ball1_visual_shape, ball1_position, paddle_orientation)
+        ball2_body_id = p.createMultiBody(0.01, collision_shape, ball2_visual_shape, ball2_position, paddle_orientation)
         
         return ball1_body_id, ball2_body_id
 
-    def get_stick_pose(self):
-        position, orientation = p.getBasePositionAndOrientation(self.stick_id)
+    def get_paddle_pose(self):
+        position, orientation = p.getBasePositionAndOrientation(self.paddle_id)
         pose = position + orientation
         return pose
     

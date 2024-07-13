@@ -19,23 +19,14 @@ class BallBalance(Env):
     Reinforcement learning environment for balancing a ball with a robot arm.
 
     Observation Space:
-    The observation space has 9 items consisting of the end-effector position (x, y, z) and the position (x, y, z) of the two cubes.
-    All the coordinates (x, y, z) are within bounds [-1.0, +1.0]
+    The observation space has 6 items consisting of the end-effector orientation (roll, pitch, yaw) and the position (x, y, z) of the ball with respect to the paddle.
 
     Action Space:
-    The action space consists of the desired end-effector displacement (dx, dy, dz) within bounds [-0.1, +0.1]
-    The end-effector orientation is always vertical pointing down.
+    The action space consists of the desired end-effector displacement (droll, dpitch, dyaw) within bounds [-0.1, +0.1]
 
     Rewards:
-    The environment provides different rewards.
-    - Touch reward: If the robot touches the cube with its fingers, a reward of +0.1 is given.
-    - Distance reward: Based on the distance between the two cubes, as follows:
-        -0.1 if the distance is greater than 0.5, cubes are far away.
-        [-0.1, 0] if the distance is between 0.5 and 0.1.
-        [0, 0.1] if the distance is between 0.1 and 0.05.
-    - Success reward: If the distance between the two cubes is less than 0.05 (close contact), a reward of 10 is given.
-    - Collision penalty: A penalty of -0.01 is given if the robot collides with the floor.
-    - Time penalty: A penalty of -0.1 is given at each step.
+    The environment provides a single reward.
+    - Time reward: A reward of +1 is given at each step that the two balls are on the paddle.
     """
 
     SIMULATION_STEP_DELAY = 1 / 240.
@@ -57,8 +48,8 @@ class BallBalance(Env):
             self.visualize = False
 
         # Set observation and action spaces
-        # Observations: the stick quaternion and the ball position relative the center of the stick
-        self.observation_space = Box(low=np.array([-1.0]*4 + [-1.0]*3), high=np.array([1.0]*4 + [1.0]*3), dtype=np.float64)
+        # Observations: the paddle roll, pitch, yaw and the two balls position relative the center of the paddle
+        self.observation_space = Box(low=np.array([-math.pi]*3 + [-1.0]*3), high=np.array([math.pi]*3 + [1.0]*3), dtype=np.float64)
         # Actions: (dx, dy, dz) for end-effector euler displacement 
         self.action_space = Box(low=np.array([-0.1]*3), high=np.array([+0.1]*3), dtype=np.float32)
 
@@ -85,7 +76,7 @@ class BallBalance(Env):
         self.robot.step_simulation = self.step_simulation # type: ignore
         self.control_method = 'end'
 
-        self.stick_id = None
+        self.paddle_id = None
         self.ball_id = None
 
     def step_simulation(self):
@@ -133,9 +124,9 @@ class BallBalance(Env):
         reward += 1 #Balance reward
 
         ball_position = self.get_ball_position()
-        stick_position = self.get_stick_pose()[:3]
+        paddle_position = self.get_paddle_pose()[:3]
 
-        if ball_position[2] < stick_position[2]:
+        if ball_position[2] < paddle_position[2]:
             terminated = True
         else:
             terminated = False
@@ -147,17 +138,19 @@ class BallBalance(Env):
         obs = dict()
         obs.update(self.robot.get_joint_obs())
 
-        obs = np.array(self.get_stick_pose()[3:])
-        relative_ball_position = np.array(self.get_stick_pose()[:3]) - np.array(self.get_ball_position())
-        obs = np.append(obs, [relative_ball_position])
+        quaternion = np.array(self.get_paddle_pose()[3:])
+        euler = p.getEulerFromQuaternion(quaternion) # To roll, pitch, yaw
+
+        relative_ball_position = np.array(self.get_paddle_pose()[:3]) - np.array(self.get_ball_position())
+        obs = np.append(euler, [relative_ball_position])
         return obs
 
     def reset(self, *, seed: Optional[int] = None, options: Optional[dict] = None):
         super().reset(seed=seed)
         self.robot.reset()
 
-        if self.stick_id is not None:
-            p.removeBody(self.stick_id)
+        if self.paddle_id is not None:
+            p.removeBody(self.paddle_id)
         if self.ball_id is not None:
             p.removeBody(self.ball_id)
 
@@ -171,7 +164,7 @@ class BallBalance(Env):
         gripper_center = self.get_gripper_geometrical_center()
         pose[1] -= 0.2
         pose[2] = gripper_center[2]
-        self.create_balance_stick(pose)
+        self.create_balance_paddle(pose)
         self.ball_id = self.create_ball()
 
         self.robot.close_gripper()
@@ -182,7 +175,7 @@ class BallBalance(Env):
     def close(self):
         p.disconnect(self.physicsClient)
 
-    def create_balance_stick(self, base_position):
+    def create_balance_paddle(self, base_position):
         # Create a rectangular collision shape
         collision_shape = p.createCollisionShape(shapeType=p.GEOM_BOX, halfExtents=[0.05, 0.1, 0.005])
         
@@ -191,14 +184,14 @@ class BallBalance(Env):
         
         # Create the multi-body using the collision shape and visual shape
         base_mass = 0.1  # mass of the object
-        self.stick_id = p.createMultiBody(base_mass, collision_shape, visual_shape, base_position, [0, 0, 0, 1])
+        self.paddle_id = p.createMultiBody(base_mass, collision_shape, visual_shape, base_position, [0, 0, 0, 1])
 
     def create_ball(self, radius=0.02):
-        # Get the position and orientation of the stick
-        stick_position, stick_orientation = p.getBasePositionAndOrientation(self.stick_id)
+        # Get the position and orientation of the paddle
+        paddle_position, paddle_orientation = p.getBasePositionAndOrientation(self.paddle_id)
         
-        # Calculate the ball position (centered on top of the stick)
-        ball_position = [stick_position[0], stick_position[1], stick_position[2] + 0.2 + radius]
+        # Calculate the ball position (centered on top of the paddle)
+        ball_position = [paddle_position[0], paddle_position[1], paddle_position[2] + 0.2 + radius]
         # Randomize the ball position a little bit
         ball_position[0] += random.uniform(-0.03, 0.03)
         ball_position[1] += random.uniform(-0.08, 0.02)
@@ -210,12 +203,12 @@ class BallBalance(Env):
         visual_shape = p.createVisualShape(shapeType=p.GEOM_SPHERE, radius=radius, rgbaColor=[1, 1, 1, 1])
         
         # Create the multi-body using the collision shape and visual shape
-        ball_body_id = p.createMultiBody(0.01, collision_shape, visual_shape, ball_position, stick_orientation)
+        ball_body_id = p.createMultiBody(0.01, collision_shape, visual_shape, ball_position, paddle_orientation)
         
         return ball_body_id
 
-    def get_stick_pose(self):
-        position, orientation = p.getBasePositionAndOrientation(self.stick_id)
+    def get_paddle_pose(self):
+        position, orientation = p.getBasePositionAndOrientation(self.paddle_id)
         pose = position + orientation
         return pose
     
