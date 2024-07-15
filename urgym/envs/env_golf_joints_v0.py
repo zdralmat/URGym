@@ -57,10 +57,10 @@ class Golf(Env):
             self.visualize = False
 
         # Set observation and action spaces
-        # Observations: the stick position, position of the ball relative to the stick and position of the ball relative to the hole
-        self.observation_space = Box(low=np.array([-1.0]*3 + [-1.0]*3 + [-1.0]*3), high=np.array([1.0]*3 + [1.0]*3 + [1.0]*3), dtype=np.float64)
-        # Actions: (dx, dy, dz) for end-effector displacement 
-        self.action_space = Box(low=np.array([-0.1]*3), high=np.array([+0.1]*3), dtype=np.float32)
+        # Observations: joints, the stick position, position of the ball relative to the stick and position of the ball relative to the hole
+        self.observation_space = Box(low=np.array([-2*math.pi]*6 + [-1.0]*3 + [-1.0]*3 + [-1.0]*3), high=np.array([2*math.pi]*6 + [1.0]*3 + [1.0]*3 + [1.0]*3), dtype=np.float64)
+        # Actions: 6 for joints displacement 
+        self.action_space = Box(low=np.array([-0.1]*6), high=np.array([+0.1]*6), dtype=np.float32)
 
         # Define environment        
         self.physicsClient = p.connect(p.GUI if self.visualize else p.DIRECT)
@@ -82,7 +82,7 @@ class Golf(Env):
 
         self.robot.load()
         self.robot.step_simulation = self.step_simulation # type: ignore
-        self.control_method = 'end'
+        self.control_method = 'joint'
 
         self.pitch_id = self.create_golf_pitch([0, -0.6, 0.02])
         self.stick_id = None
@@ -120,10 +120,8 @@ class Golf(Env):
         reward = 0
         
         # Differential version
-        ee_pose = list(self.robot.get_ee_pose())
-        ee_pose[:3] += action
-        ee_pose[3:] = self.vertical_quaternion # to keep the end effector vertical at all times
-        self.robot.move_ee(ee_pose, self.control_method)
+        new_joints_positions = np.array(self.robot.get_joint_states()) + action
+        self.robot.move_ee(new_joints_positions, self.control_method)
 
         self.wait_until_stable()
                 
@@ -228,11 +226,12 @@ class Golf(Env):
         return False
 
     def get_observation(self):
+        joints = self.robot.get_joint_states()
         stick_position = np.array(self.get_stick_base_position())
         ball_position = np.array(self.get_ball_position())
         relative_ball_hole_position = np.array(self.get_hole_position()) - ball_position
         relative_ball_stick_position = stick_position - ball_position
-        obs = np.append(stick_position, [relative_ball_stick_position, relative_ball_hole_position])
+        obs = np.append(joints, [stick_position, relative_ball_stick_position, relative_ball_hole_position])
         return obs
 
     def reset(self, *, seed: Optional[int] = None, options: Optional[dict] = None):

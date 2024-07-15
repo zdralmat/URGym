@@ -135,9 +135,6 @@ class BallBalance(Env):
 
     
     def get_observation(self):
-        obs = dict()
-        obs.update(self.robot.get_joint_obs())
-
         quaternion = np.array(self.get_paddle_pose()[3:])
         euler = p.getEulerFromQuaternion(quaternion) # To roll, pitch, yaw
 

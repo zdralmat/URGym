@@ -137,9 +137,6 @@ class TwoBallsBalance(Env):
 
     
     def get_observation(self):
-        obs = dict()
-        obs.update(self.robot.get_joint_obs())
-
         quaternion = np.array(self.get_paddle_pose()[3:])
         euler = p.getEulerFromQuaternion(quaternion) # To roll, pitch, yaw
         relative_ball1_position = np.array(self.get_paddle_pose()[:3]) - np.array(self.get_ball_position(self.ball1_id))

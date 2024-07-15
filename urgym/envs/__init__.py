@@ -74,3 +74,9 @@ register(
     entry_point='urgym.envs.env_golf_v0:Golf',
     max_episode_steps=100,
 )
+
+register(
+    id='URGym/GolfJoints-v0',
+    entry_point='urgym.envs.env_golf_joints_v0:Golf',
+    max_episode_steps=100,
+)
