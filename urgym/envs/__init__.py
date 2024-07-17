@@ -56,3 +56,27 @@ register(
     entry_point='urgym.envs.env_cubes_grasp_v4:CubesGrasp',
     max_episode_steps=20,
 )
+
+register(
+    id='URGym/BallBalance-v0',
+    entry_point='urgym.envs.env_ball_balance_v0:BallBalance',
+    max_episode_steps=500,
+)
+
+register(
+    id='URGym/TwoBallsBalance-v0',
+    entry_point='urgym.envs.env_two_balls_balance_v0:TwoBallsBalance',
+    max_episode_steps=500,
+)
+
+register(
+    id='URGym/Golf-v0',
+    entry_point='urgym.envs.env_golf_v0:Golf',
+    max_episode_steps=100,
+)
+
+register(
+    id='URGym/GolfJoints-v0',
+    entry_point='urgym.envs.env_golf_joints_v0:Golf',
+    max_episode_steps=100,
+)
