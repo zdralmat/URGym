@@ -155,7 +155,7 @@ class Panda(RobotBase):
         self.arm_num_dofs = 7
         self.arm_rest_poses = [0.98, 0.458, 0.31, -2.24, -0.30, 2.66, 2.32]
         current_dir = os.path.dirname(__file__)
-        self.id = p.loadURDF(os.path.join(current_dir,'./urdf/panda.urdf'), self.base_pos, self.base_ori,
+        self.id = p.loadURDF(os.path.join(current_dir,'../urdf/panda.urdf'), self.base_pos, self.base_ori,
                              useFixedBase=True, flags=p.URDF_ENABLE_CACHED_GRAPHICS_SHAPES)
         self.gripper_range = [0, 0.04]
         # create a constraint to keep the fingers centered
@@ -182,7 +182,7 @@ class UR5Robotiq85(RobotBase):
         self.arm_rest_poses = [-1.5690622952052096, -1.5446774605904932, 1.343946009733127, -1.3708613585093699,
                                -1.5707970583733368, 0.0009377758247187636]
         current_dir = os.path.dirname(__file__)
-        self.id = p.loadURDF(os.path.join(current_dir, './urdf/ur5_robotiq_85.urdf'), self.base_pos, self.base_ori,
+        self.id = p.loadURDF(os.path.join(current_dir, '../urdf/ur5_robotiq_85.urdf'), self.base_pos, self.base_ori,
                              useFixedBase=True, flags=p.URDF_ENABLE_CACHED_GRAPHICS_SHAPES)
         self.gripper_range = [0, 0.085]
     
@@ -224,7 +224,7 @@ class UR5Robotiq140(UR5Robotiq85):
         self.arm_rest_poses = [-1.5690622952052096, -1.5446774605904932, 1.343946009733127, -1.3708613585093699,
                                -1.5707970583733368, 0.0009377758247187636]
         current_dir = os.path.dirname(__file__)
-        self.id = p.loadURDF(os.path.join(current_dir, './urdf/ur5_robotiq_140.urdf'), self.base_pos, self.base_ori,
+        self.id = p.loadURDF(os.path.join(current_dir, '../urdf/ur5_robotiq_140.urdf'), self.base_pos, self.base_ori,
                              useFixedBase=True, flags=p.URDF_ENABLE_CACHED_GRAPHICS_SHAPES)
         self.gripper_range = [0, 0.085]
         # TODO: It's weird to use the same range and the same formula to calculate open_angle as Robotiq85.

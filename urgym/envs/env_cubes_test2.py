@@ -13,8 +13,8 @@ from gymnasium.envs.registration import register
 
 import pybullet as p
 import pybullet_data
-from urgym.utilities import YCBModels, Models, Camera, rotate_quaternion, geometric_distance_reward
-from urgym.robot import Panda, UR5Robotiq85, UR5Robotiq140
+from urgym.base.utilities import YCBModels, Models, Camera, rotate_quaternion, geometric_distance_reward
+from urgym.base.robot import Panda, UR5Robotiq85, UR5Robotiq140
 
 class CubesManipulation(Env):
 

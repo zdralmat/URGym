@@ -11,8 +11,8 @@ from gymnasium.spaces import Box
 
 import pybullet as p
 import pybullet_data
-from urgym.utilities import rotate_quaternion, geometric_distance_reward, print_link_names_and_indices
-from urgym.robot import UR5Robotiq85
+from urgym.base.utilities import rotate_quaternion, geometric_distance_reward, print_link_names_and_indices
+from urgym.base.robot import UR5Robotiq85
 
 class TwoBallsBalance(Env):
     """

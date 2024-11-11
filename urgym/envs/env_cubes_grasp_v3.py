@@ -9,8 +9,8 @@ from gymnasium.spaces import Box
 
 import pybullet as p
 import pybullet_data
-from urgym.utilities import YCBModels, Camera, rotate_quaternion, geometric_distance_reward, z_alignment_distance, normalize_quaternion, print_link_names_and_indices
-from urgym.robot import UR5Robotiq85
+from urgym.base.utilities import YCBModels, Camera, rotate_quaternion, geometric_distance_reward, z_alignment_distance, normalize_quaternion, print_link_names_and_indices
+from urgym.base.robot import UR5Robotiq85
 import random
 import traceback
 
