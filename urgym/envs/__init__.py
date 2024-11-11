@@ -52,8 +52,8 @@ register(
 )
 
 register(
-    id='URGym/CubesGrasp-v4',
-    entry_point='urgym.envs.env_cubes_grasp_v4:CubesGrasp',
+    id='URGym/CubesGrasp-v0',
+    entry_point='urgym.envs.env_cubes_grasp_v0:CubesGrasp',
     max_episode_steps=20,
 )
 
