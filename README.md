@@ -1,39 +1,16 @@
-# Gymnasium enabled UR5 arm with Robotiq-85 / 140 gripper in PyBullet simulator
+# URGym
+Pybullet-based Gymnasium compatible environments for Universal Robot UR5.
 Forked from [ElectronicElephant/pybullet_ur5_robotiq](https://github.com/ElectronicElephant/pybullet_ur5_robotiq)
 
-This repo is under active development. Issues / PRs are welcomed.
+This project provides a collection of Pybullet-based Gymnasium compatible environments for training UR5 robots. Each environment is designed to offer a unique task for reinforcement learning.
 
-![User Control Demo](https://raw.githubusercontent.com/ElectronicElephant/pybullet_ur5_robotiq/main/example.png)
+Available environments are:
 
-## Highlights
+- URGym/BallBalance: balance a ball over a flat surface (like a paddle) attached to the robot gripper.
+- URGym/TwoBallsBalance: balance two balls simultanouslly over a flat surface attached to the robot gripper.
+- URGym/CubesPush: push a cube with the tip of the gripper to move it closer to a target area.
+- URGym/CubesGrasp: grasp a cube with the gripper.
+- URGym/Gold: use a golf-like club to move a ball to the target hole.
+- URGym/Box: the original environment from Forked from [ElectronicElephant/pybullet_ur5_robotiq](https://github.com/ElectronicElephant/pybullet_ur5_robotiq)
 
-- UR5 arm with end-effector 6D IK (Position [X Y Z] and Orientation [R P Y])
-- Enhanced Robotiq-85 / 140 gripper, with precise position control and experimental torque control
-- Built-in YCB models loader (and obj models after decomposition)
-- Gym-styled API, making it suitable for Reinforcement Learning in the field of push-and-grasp
-- A heuristic grasping demo
-- An interactive user-control demo
-
-## Prerequisites
-- Python 3
-- PyBullet
-
-## Run
-
-You can try this repo with the interactive user-control demo.
-```[Python]
-python train.py
-```
-
-###  References
-https://github.com/ElectronicElephant/pybullet_ur5_robotiq
-
-https://github.com/matafela/pybullet_grasp_annotator_robotiq_85
-
-https://github.com/zswang666/pybullet-playground
-
-https://github.com/ros-industrial/robotiq
-
-https://github.com/Alchemist77/pybullet-ur5-equipped-with-robotiq-140
-
-I do not claim copyright for any model files under this repo.
+Feel free to explore these environments and start training your RL agents!
