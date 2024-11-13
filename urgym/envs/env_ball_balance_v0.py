@@ -26,7 +26,7 @@ class BallBalance(Env):
 
     Rewards:
     The environment provides a single reward.
-    - Time reward: A reward of +1 is given at each step that the two balls are on the paddle.
+    - Time reward: A reward of +1 is given at each step that the ball is on the paddle.
     """
 
     SIMULATION_STEP_DELAY = 1 / 240.
