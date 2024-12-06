@@ -105,10 +105,13 @@ class TwoBallsBalance(Env):
 
     def step(self, action):
         """
-        action: (dx, dy, dz, dw) for End-Effector Queternion Displacement Control
+        action: (dx, dy, dz) for End-Effector Queternion Displacement Control
         """
-
         reward = 0
+        for i in action:
+            reward += self.punishment(i)
+
+        
         
         # Differential version
         ee_pose = list(self.robot.get_ee_pose())
@@ -127,6 +130,13 @@ class TwoBallsBalance(Env):
         ball1_position = self.get_ball_position(self.ball1_id)
         ball2_position = self.get_ball_position(self.ball2_id)
         paddle_position = self.get_paddle_pose()[:3]
+        
+        
+
+        reward += self.reward_function(abs(ball1_position[0]))
+        reward += self.reward_function(abs(ball1_position[1]))
+        reward += self.reward_function(abs(ball2_position[0]))
+        reward += self.reward_function(abs(ball2_position[1]))
 
         if ball1_position[2] < paddle_position[2] or ball2_position[2] < paddle_position[2]:
             terminated = True
@@ -135,6 +145,14 @@ class TwoBallsBalance(Env):
 
         return self.get_observation(), reward, terminated, truncated, {}
 
+    def reward_function(self, x):
+        if x > 1:
+            return 0
+        return 1 - x**2
+    def punishment(self, x):
+        x = abs(x)
+        return -1 * x
+    
     
     def get_observation(self):
         quaternion = np.array(self.get_paddle_pose()[3:])
