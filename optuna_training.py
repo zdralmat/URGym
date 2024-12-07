@@ -59,11 +59,11 @@ def objectivePPO(trial):
     mean_reward = 0.0
     n_eval_episodes = 10
     for _ in range(n_eval_episodes):
-        obs = env.reset()
+        obs, info = env.reset()
         done = False
         while not done:
             action, _states = model.predict(obs)
-            obs, reward, done, info = env.step(action)
+            obs, reward, done, info, _ = env.step(action)
             mean_reward += reward
     mean_reward /= n_eval_episodes
 
@@ -109,11 +109,11 @@ def objectiveA2C(trial):
     mean_reward = 0.0
     n_eval_episodes = 10
     for _ in range(n_eval_episodes):
-        obs = env.reset()
+        obs, info = env.reset()
         done = False
         while not done:
             action, _states = model.predict(obs)
-            obs, reward, done, info = env.step(action)
+            obs, reward, done, info, _ = env.step(action)
             mean_reward += reward
     mean_reward /= n_eval_episodes
 
@@ -162,11 +162,11 @@ def objectiveSAC(trial):
     mean_reward = 0.0
     n_eval_episodes = 10
     for _ in range(n_eval_episodes):
-        obs = env.reset()
+        obs, info = env.reset()
         done = False
         while not done:
             action, _states = model.predict(obs)
-            obs, reward, done, info = env.step(action)
+            obs, reward, done, info, _ = env.step(action)
             mean_reward += reward
     mean_reward /= n_eval_episodes
 
@@ -216,11 +216,11 @@ def objectiveTD3(trial):
     mean_reward = 0.0
     n_eval_episodes = 10
     for _ in range(n_eval_episodes):
-        obs = env.reset()
+        obs, info = env.reset()
         done = False
         while not done:
             action, _states = model.predict(obs)
-            obs, reward, done, info = env.step(action)
+            obs, reward, done, info, _ = env.step(action)
             mean_reward += reward
     mean_reward /= n_eval_episodes
 
