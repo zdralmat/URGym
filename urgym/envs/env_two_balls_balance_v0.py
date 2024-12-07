@@ -184,7 +184,7 @@ class TwoBallsBalance(Env):
         pose[1] -= 0.2
         pose[2] = gripper_center[2]
         self.create_balance_paddle(pose)
-        self.ball1_id, self.ball2_id = self.create_balls()
+        self.ball1_id, self.ball2_id = self.create_balls(0.003)
 
         self.robot.close_gripper()
         self.wait_until_stable()
@@ -195,11 +195,13 @@ class TwoBallsBalance(Env):
         p.disconnect(self.physicsClient)
 
     def create_balance_paddle(self, base_position):
+        paddle_size = [0.05, 0.1, 0.005]  # [0.05, 0.1, 0.005]
+
         # Create a rectangular collision shape
-        collision_shape = p.createCollisionShape(shapeType=p.GEOM_BOX, halfExtents=[0.05, 0.1, 0.005])
+        collision_shape = p.createCollisionShape(shapeType=p.GEOM_BOX, halfExtents=paddle_size)
         
         # Create a visual shape (optional, for better visualization)
-        visual_shape = p.createVisualShape(shapeType=p.GEOM_BOX, halfExtents=[0.05, 0.1, 0.005], rgbaColor=[1, 0.5, 0, 1])
+        visual_shape = p.createVisualShape(shapeType=p.GEOM_BOX, halfExtents=paddle_size, rgbaColor=[1, 0.5, 0, 1])
         
         # Create the multi-body using the collision shape and visual shape
         base_mass = 0.1  # mass of the object

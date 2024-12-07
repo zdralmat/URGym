@@ -7,6 +7,7 @@ env = TwoBallsBalance()
 env.reset()
 actions = env.action_space
 print("quii:",actions)
+input("Press Enter to continue...")
 for i in range(10000):
     action = np.random.uniform(-0.1, 0.1, 3)
     print(action)
