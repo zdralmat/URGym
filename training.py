@@ -34,7 +34,7 @@ for i in range(1, NUM_ITERATIONS + 1):
         reset_num_timesteps=False,
         tb_log_name=ALGORITHM
     )
-    model.save(f"{models_dir}/ model_{i}")
+    model.save(f"{models_dir}/model_{i}")
 
 # Evaluate the agent
 mean_reward, std_reward = evaluate_policy(model, env, n_eval_episodes=10, render=True)
