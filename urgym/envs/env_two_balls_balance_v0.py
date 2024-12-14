@@ -79,12 +79,15 @@ class TwoBallsBalance(Env):
         self.paddle_id = None
         self.ball1_id = None
         self.ball2_id = None
+        self.paddle_size = None
+        self.ellipse_ids = None
 
     def step_simulation(self):
         """
         Hook p.stepSimulation()
         """
         p.stepSimulation()
+        #self.update_ellipses()
         if self.visualize:
             time.sleep(self.SIMULATION_STEP_DELAY)
 
@@ -133,10 +136,12 @@ class TwoBallsBalance(Env):
         
         
 
-        reward += self.reward_function(abs(ball1_position[0]))
+        '''reward += self.reward_function(abs(ball1_position[0]))
         reward += self.reward_function(abs(ball1_position[1]))
         reward += self.reward_function(abs(ball2_position[0]))
-        reward += self.reward_function(abs(ball2_position[1]))
+        reward += self.reward_function(abs(ball2_position[1]))'''
+
+        reward += self.reward_function()
 
         if ball1_position[2] < paddle_position[2] or ball2_position[2] < paddle_position[2]:
             terminated = True
@@ -144,11 +149,22 @@ class TwoBallsBalance(Env):
             terminated = False
 
         return self.get_observation(), reward, terminated, truncated, {}
-
+    '''
     def reward_function(self, x):
         if x > 1:
             return 0
         return 1 - x**2
+    '''
+    def reward_function(self):
+        reward = 0
+        results1 = self.check_ball_in_ellipses(self.ball1_id)
+        results2 = self.check_ball_in_ellipses(self.ball2_id)
+        for i in range(len(results1)):
+            if results1[i] and results2[i]:
+                reward += 1
+                
+        return reward
+    
     def punishment(self, x):
         x = abs(x)
         return -1 * x
@@ -172,6 +188,9 @@ class TwoBallsBalance(Env):
             p.removeBody(self.ball1_id)
         if self.ball2_id is not None:
             p.removeBody(self.ball2_id)
+        if self.ellipse_ids is not None:
+            for ellipse_id in self.ellipse_ids:
+                p.removeBody(ellipse_id)
 
         new_pose = [0.0, -0.60, 0.60, 0.50, -0.50, -0.50, 0.50]
 
@@ -184,10 +203,14 @@ class TwoBallsBalance(Env):
         pose[1] -= 0.2
         pose[2] = gripper_center[2]
         self.create_balance_paddle(pose)
-        self.ball1_id, self.ball2_id = self.create_balls(0.003)
+        self.ball1_id, self.ball2_id = self.create_balls()
+        #self.ellipse_ids = self.create_ellipses(n=5)
+        #print(self.ellipse_ids)
 
         self.robot.close_gripper()
         self.wait_until_stable()
+        
+       
 
         return self.get_observation(), {}
 
@@ -195,13 +218,13 @@ class TwoBallsBalance(Env):
         p.disconnect(self.physicsClient)
 
     def create_balance_paddle(self, base_position):
-        paddle_size = [0.05, 0.1, 0.005]  # [0.05, 0.1, 0.005]
+        self.paddle_size = [0.13, 0.1, 0.005]  # [0.05, 0.1, 0.005]
 
         # Create a rectangular collision shape
-        collision_shape = p.createCollisionShape(shapeType=p.GEOM_BOX, halfExtents=paddle_size)
+        collision_shape = p.createCollisionShape(shapeType=p.GEOM_BOX, halfExtents=self.paddle_size)
         
         # Create a visual shape (optional, for better visualization)
-        visual_shape = p.createVisualShape(shapeType=p.GEOM_BOX, halfExtents=paddle_size, rgbaColor=[1, 0.5, 0, 1])
+        visual_shape = p.createVisualShape(shapeType=p.GEOM_BOX, halfExtents=self.paddle_size, rgbaColor=[1, 0.5, 0, 1])
         
         # Create the multi-body using the collision shape and visual shape
         base_mass = 0.1  # mass of the object
@@ -229,8 +252,8 @@ class TwoBallsBalance(Env):
         ball2_visual_shape = p.createVisualShape(shapeType=p.GEOM_SPHERE, radius=radius, rgbaColor=[0, 0, 0, 1.0])
         
         # Create the multi-body using the collision shape and visual shape
-        ball1_body_id = p.createMultiBody(0.01, collision_shape, ball1_visual_shape, ball1_position, paddle_orientation)
-        ball2_body_id = p.createMultiBody(0.01, collision_shape, ball2_visual_shape, ball2_position, paddle_orientation)
+        ball1_body_id = p.createMultiBody(0.0041, collision_shape, ball1_visual_shape, ball1_position, paddle_orientation)
+        ball2_body_id = p.createMultiBody(0.0041, collision_shape, ball2_visual_shape, ball2_position, paddle_orientation)
         
         return ball1_body_id, ball2_body_id
 
@@ -239,6 +262,101 @@ class TwoBallsBalance(Env):
         pose = position + orientation
         return pose
     
+    def create_ellipses(self, n ):
+        # Get the center and orientation of the paddle
+        center, orientation = p.getBasePositionAndOrientation(self.paddle_id)
+        center_x, center_y, center_z = center  # Assuming 3D coordinates
+        initial_radius_x = self.paddle_size[0] / (n/2)
+        radius_increment_x = initial_radius_x / (n/2)
+        initial_radius_y = self.paddle_size[1] / (n/2)
+        radius_increment_y = initial_radius_y / (n/2)
+        # Convert quaternion to Euler angles to get the rotation angle
+        _, _, yaw = p.getEulerFromQuaternion(orientation)
+
+        # Array to store the IDs of the created ellipses
+        ellipse_ids = []
+
+        # Define a list of colors to rotate through
+        colors = [
+            [1, 0, 0, 1],  # Red
+            [0, 1, 0, 1],  # Green
+            [0, 0, 1, 1],  # Blue
+            [1, 1, 0, 1],  # Yellow
+            [1, 0, 1, 1],  # Magenta
+            [0, 1, 1, 1]   # Cyan
+        ]
+
+        # Create n ellipses with increasing radii
+        for i in range(n):
+            radius_x = initial_radius_x + i * radius_increment_x
+            radius_y = initial_radius_y + i * radius_increment_y
+            color = colors[i % len(colors)]  # Rotate through the colors
+            visual_shape_id = p.createVisualShape(
+                shapeType=p.GEOM_BOX,
+                halfExtents=[radius_x, radius_y, 0.01],  # Ellipse dimensions
+                rgbaColor=color,  # Use the rotated color
+                visualFramePosition=[0, 0, 0],
+                visualFrameOrientation=p.getQuaternionFromEuler([0, 0, yaw])
+            )
+            ellipse_id = p.createMultiBody(
+                baseMass=0,
+                baseCollisionShapeIndex=-1,
+                baseVisualShapeIndex=visual_shape_id,
+                basePosition=[center_x, center_y, center_z + 0.00001 * (n-i)],  # Slightly offset in z to avoid overlap
+                baseOrientation=orientation
+            )
+            ellipse_ids.append(ellipse_id)
+
+
+        # Return the array of ellipse IDs
+        return ellipse_ids
+    
+
+    def is_ball_in_ellipse(self, ball_position, ellipse_center, radius_x, radius_y):
+        rel_x = ball_position[0] - ellipse_center[0]
+        rel_y = ball_position[1] - ellipse_center[1]
+        return (rel_x**2 / radius_x**2) + (rel_y**2 / radius_y**2) <= 1
+
+    
+    def check_ball_in_ellipses(self, ball_id, n=5):
+        # Get the position of the ball
+        ball_position, _ = p.getBasePositionAndOrientation(ball_id)
+
+        # Get the center and orientation of the paddle
+        center, orientation = p.getBasePositionAndOrientation(self.paddle_id)
+        center_x, center_y, center_z = center  # Assuming 3D coordinates
+
+        # Array to store the results
+        results = []
+
+        # Define the initial radii and increments
+        initial_radius_x = self.paddle_size[0] / (n/2)
+        radius_increment_x = initial_radius_x / (n/2)
+        initial_radius_y = self.paddle_size[1] / (n/2)
+        radius_increment_y = initial_radius_y / (n/2)
+
+        # Check if the ball is within each ellipse
+        for i in range(n):
+            radius_x = initial_radius_x + i * radius_increment_x
+            radius_y = initial_radius_y + i * radius_increment_y
+            ellipse_center = [center_x, center_y, center_z ]
+            results.append(self.is_ball_in_ellipse(ball_position, ellipse_center, radius_x, radius_y))
+
+        return results
+    
+    def update_ellipses(self):
+        # Check if ellipses have been created
+        if self.ellipse_ids is None:
+            return
+
+        # Get the current position and orientation of the paddle
+        center, orientation = p.getBasePositionAndOrientation(self.paddle_id)
+        center_x, center_y, center_z = center  # Assuming 3D coordinates
+
+        # Update the position and orientation of each ellipse
+        for i, ellipse_id in enumerate(self.ellipse_ids):
+            p.resetBasePositionAndOrientation(ellipse_id, [center_x, center_y, center_z + 0.0001 * (len(self.ellipse_ids) - i)], orientation)
+
     def get_ball_position(self, ball_id):
         position, _ = p.getBasePositionAndOrientation(ball_id)
         return position
