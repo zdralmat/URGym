@@ -31,7 +31,7 @@ class TwoBallsBalance(Env):
 
     SIMULATION_STEP_DELAY = 1 / 240.
 
-    def __init__(self, camera=None, reward_type='dense',  render_mode='human') -> None:
+    def __init__(self, camera=None, reward_type='dense',  render_mode='human', paddle=2.6) -> None:
         """
         Initialize the environment.
 
@@ -79,7 +79,7 @@ class TwoBallsBalance(Env):
         self.paddle_id = None
         self.ball1_id = None
         self.ball2_id = None
-        self.paddle_size = None
+        self.paddle_size = [0.05*paddle, 0.1, 0.005]
         self.ellipse_ids = None
 
     def step_simulation(self):
@@ -218,7 +218,7 @@ class TwoBallsBalance(Env):
         p.disconnect(self.physicsClient)
 
     def create_balance_paddle(self, base_position):
-        self.paddle_size = [0.13, 0.1, 0.005]  # [0.05, 0.1, 0.005]
+        #self.paddle_size = [0.13, 0.1, 0.005]  # [0.05, 0.1, 0.005]
 
         # Create a rectangular collision shape
         collision_shape = p.createCollisionShape(shapeType=p.GEOM_BOX, halfExtents=self.paddle_size)
