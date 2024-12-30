@@ -252,8 +252,8 @@ class TwoBallsBalance(Env):
         ball2_visual_shape = p.createVisualShape(shapeType=p.GEOM_SPHERE, radius=radius, rgbaColor=[0, 0, 0, 1.0])
         
         # Create the multi-body using the collision shape and visual shape
-        ball1_body_id = p.createMultiBody(0.0041, collision_shape, ball1_visual_shape, ball1_position, paddle_orientation)
-        ball2_body_id = p.createMultiBody(0.0041, collision_shape, ball2_visual_shape, ball2_position, paddle_orientation)
+        ball1_body_id = p.createMultiBody(0.0051, collision_shape, ball1_visual_shape, ball1_position, paddle_orientation)
+        ball2_body_id = p.createMultiBody(0.0051, collision_shape, ball2_visual_shape, ball2_position, paddle_orientation)
         
         return ball1_body_id, ball2_body_id
 

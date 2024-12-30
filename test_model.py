@@ -52,7 +52,7 @@ last_model_path = get_last_saved_model(models_dir)
 if last_model_path:
     change_step = int(last_model_path.split('/')[-1].split('_')[0])
 
-    env = TwoBallsBalance(render_mode="human", paddle=PADDLE_MULTIPLIER - 0.1 * change_step)
+    env = TwoBallsBalance(render_mode="human", paddle=PADDLE_MULTIPLIER - 0.1 * 16)#change_step)
     model = load_model_with_new_env(last_model_path, env)
     print(f"Loaded model from {last_model_path}")
 else:
@@ -61,7 +61,7 @@ else:
 
 
 
-
+input("Press Enter to continue...")
 mean_reward, std_reward = evaluate_policy(model, env, n_eval_episodes=10)
 print(f"Mean reward: {mean_reward} ± {std_reward}")
 

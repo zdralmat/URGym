@@ -10,7 +10,7 @@ from urgym.envs.env_two_balls_balance_v0 import TwoBallsBalance
 ALGORITHM = "PPO"
 models_dir = f"models/{ALGORITHM}"
 log_dir = "logs"
-REW_TRESHOLD = 1000 #1000
+REW_TRESHOLD = 130 #1000
 PADDLE_MULTIPLIER = 2.6
 CONTINUE = False
 add = 0
@@ -108,7 +108,7 @@ if CONTINUE:
         env = TwoBallsBalance(render_mode="training")
         model = PPO("MlpPolicy", env, verbose=1, tensorboard_log=log_dir)
 else:
-    print("the contants of the models directory are abou to be deleted")
+    print("the contants of the models directory are about to be deleted")
     while True:
         print("The contents of the models directory are about to be deleted. Continue? (Y/N)")
         user_input = input().strip().upper()
