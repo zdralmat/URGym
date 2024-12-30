@@ -124,7 +124,7 @@ class TwoBallsBalance(Env):
         ee_pose[3:] = quaternion
         self.robot.move_ee(ee_pose, self.control_method)
 
-        self.wait_until_stable()
+        stability = self.wait_until_stable()
                 
         truncated = False # Managed by the environment automatically
 
@@ -144,9 +144,9 @@ class TwoBallsBalance(Env):
         reward += self.reward_function()
 
         if ball1_position[2] < paddle_position[2] or ball2_position[2] < paddle_position[2]:
-            terminated = True
+            terminated = True 
         else:
-            terminated = False
+            terminated = False or not stability
 
         return self.get_observation(), reward, terminated, truncated, {}
     '''
